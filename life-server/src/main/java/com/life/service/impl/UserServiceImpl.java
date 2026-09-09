@@ -130,9 +130,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, LifeUser> implement
         }
 
         // 验证用户是否存在，存在则不允许重复创建
-        int count = userMapper.selectByRegisterInfo(username,phone,email);
-        if (count != 0 ) {
-            throw new UserAlreadyExistsException("用户已存在，请前往登录页面进行登录");
+        if (userMapper.selectByUsername(username) != 0) {
+            throw new UserAlreadyExistsException("用户名已存在");
+        }
+        if (userMapper.selectByPhone(phone) != 0) {
+            throw new UserAlreadyExistsException("手机号已注册");
+        }
+        if (email != null && !email.isBlank() && userMapper.selectByEmail(email) != 0) {
+            throw new UserAlreadyExistsException("邮箱已被使用");
         }
 
         registerDTO.setPassword(BCrypt.hashpw(rawPassword,BCrypt.gensalt(10)));

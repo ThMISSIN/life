@@ -25,4 +25,20 @@ public class MessageConstant {
     public static final String ORDER_STATUS_ERROR = "订单状态错误";
     public static final String ORDER_NOT_FOUND = "订单不存在";
 
+    // ==================== 权益模块 ====================
+    public static final String CATEGORY_ID_REQUIRED = "分类ID不能为空";
+    public static final String CATEGORY_NAME_REQUIRED = "分类名称不能为空";
+    public static final String CATEGORY_NAME_EXISTS = "分类名称已存在";
+    public static final String CATEGORY_PARENT_ERROR = "上级分类不存在或层级不正确";
+    public static final String CATEGORY_BE_RELATED = "当前分类下存在子分类或已挂载权益,不能删除";
+    public static final String BENEFIT_NAME_REQUIRED = "权益名称不能为空";
+    public static final String BENEFIT_BE_USED = "当前权益存在未使用的用户权益,不能删除";
+    public static final String BENEFIT_NOT_FOUND = "权益不存在或已下架";
+
+    public static final String USER_LEVEL_NOT_ENOUGH = "当前用户的会员等级不够";
+    public static final String BENEFIT_STOCK_NOT_ENOUGH = "权益库存不足";
+    public static final String USER_EXCHANGED_COUNT_REACH_LIMIT = "当前用户已领权益数量已超限，无法继续领取";
+    public static final String USER_POINTS_NOT_ENOUGH = "当前用户积分不足，无法兑换";
+    public static final String BENEFIT_VALID_CONFIG_ERROR = "权益有效期配置异常,请联系客服";
+    public static final String BENEFIT_ALREADY_EXPIRED = "该权益已超过兑换有效期";
 }

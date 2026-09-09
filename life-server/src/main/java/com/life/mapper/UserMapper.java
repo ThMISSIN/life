@@ -6,6 +6,7 @@ import com.life.entity.LifeUser;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.time.LocalDateTime;
 
@@ -21,7 +22,14 @@ public interface UserMapper extends BaseMapper<LifeUser> {
 
     void updateLoginInfo(@Param("id") Long id, @Param("clientIp") String clientIp, @Param("now") LocalDateTime now);
 
-    int selectByRegisterInfo(@Param("username") String username, @Param("phone") String phone, @Param("email") String email);
+    int selectByUsername(@Param("username") String username);
+
+    int selectByPhone(@Param("phone") String phone);
+
+    int selectByEmail(@Param("email") String email);
 
     void saveUser(RegisterDTO registerDTO);
+
+    @Update("update life_social.life_user set points = points - #{pointsPrice} where id = #{userId} and points >= #{pointsPrice}")
+    int deductPoints(Long userId, Integer pointsPrice);
 }

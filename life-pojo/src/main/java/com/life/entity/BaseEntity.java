@@ -2,6 +2,7 @@ package com.life.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import lombok.Data;
 
 import java.io.Serializable;
@@ -40,7 +41,9 @@ public abstract class BaseEntity implements Serializable {
 
     /**
      * 删除标志: 0-未删除, 1-已删除
+     * 逻辑删除: MP内置方法自动过滤已删除数据, removeById自动转为UPDATE置1
      */
     @TableField(fill = FieldFill.INSERT)
+    @TableLogic
     private Integer deleted;
 }

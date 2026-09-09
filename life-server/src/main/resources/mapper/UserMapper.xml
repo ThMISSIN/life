@@ -27,27 +27,30 @@
 
 
     <select id="selectByLoginAccount" resultType="com.life.entity.LifeUser">
-        select *
+        select
+            id,username,phone,nickname,create_time,avatar,email,user_type,points,
+            update_time,level,status,last_login_time,last_login_ip,creater,login_count,updater,deleted
         from life_social.life_user
         where deleted = 0
           and (username = #{account}
             or phone = #{account}
             or email = #{account})
     </select>
-    <select id="selectByRegisterInfo" resultType="java.lang.Integer">
+    <select id="selectByUsername" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM life_social.life_user
-        WHERE deleted = 0
-        <trim prefix="AND (" suffix=")" prefixOverrides="OR">
-            username = #{username}
+        WHERE deleted = 0 AND username = #{username}
+    </select>
 
-            <if test="phone != null and phone != ''">
-                OR phone = #{phone}
-            </if>
+    <select id="selectByPhone" resultType="java.lang.Integer">
+        SELECT COUNT(1)
+        FROM life_social.life_user
+        WHERE deleted = 0 AND phone = #{phone}
+    </select>
 
-            <if test="email != null and email != ''">
-                OR email = #{email}
-            </if>
-        </trim>
+    <select id="selectByEmail" resultType="java.lang.Integer">
+        SELECT COUNT(1)
+        FROM life_social.life_user
+        WHERE deleted = 0 AND email = #{email}
     </select>
 </mapper>

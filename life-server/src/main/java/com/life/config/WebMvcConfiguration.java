@@ -23,15 +23,17 @@ public class WebMvcConfiguration implements WebMvcConfigurer {
     private JwtTokenUserInterceptor jwtTokenUserInterceptor;
 
     /**
-     * 注册自定义拦截器：/user/** 下的接口均需登录（token校验+登出黑名单校验），
-     * 登录、注册、忘记密码为公开接口
+     * 注册自定义拦截器：需登录的接口（token校验+登出黑名单校验），
+     * 登录、注册、忘记密码为公开接口。
+     * /user/** 用户接口, /benefit/** 权益C端接口, /admin/** 管理端接口
+     * (管理端目前仅要求登录, 管理员身份校验待管理端鉴权方案落地后补充)
      *
      * @param registry
      */
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(jwtTokenUserInterceptor)
-                .addPathPatterns("/user/**")
+                .addPathPatterns("/user/**", "/benefit/**", "/admin/**", "/signRecord/**", "/points/**")
                 .excludePathPatterns(
                         "/user/user/login",
                         "/user/user/register",
