@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.life.mapper.LifeFollowMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="followUserMap" type="com.life.vo.FollowUserVO">
+        <result column="follow_time" property="followTime"/>
+        <association property="author" javaType="com.life.vo.AuthorVO">
+            <id column="uid" property="userId"/>
+            <result column="username" property="username"/>
+            <result column="nickname" property="nickname"/>
+            <result column="avatar" property="avatar"/>
+            <result column="followed" property="followed"/>
+        </association>
+    </resultMap>
+
+    <!-- 关注列表 -->
+    <select id="selectFollowingPage" resultMap="followUserMap">
+        SELECT f.create_time       AS follow_time,
+               u.id                AS uid,
+               u.username          AS username,
+               u.nickname          AS nickname,
+               u.avatar            AS avatar,
+               (f2.id IS NOT NULL) AS followed
+        FROM life_social.life_follow f
+                 # 与关注列表进行 内连接 取出所有关注数据
+                 INNER JOIN life_social.life_user u
+                            ON u.id = f.follow_user_id AND u.deleted = 0
+            # 与自身进行左连接  取出与我有关的关注数据
+                 LEFT JOIN life_social.life_follow f2
+                           ON f2.follow_user_id = f.follow_user_id # 关联查询条件
+                               AND f2.user_id = #{me}              # 我是否关注了TA
+                               AND f2.deleted = 0
+        WHERE f.user_id = #{owner}
+          AND f.deleted = 0
+        ORDER BY f.create_time DESC, f.id DESC
+    </select>
+
+    <!-- 粉丝列表-->
+    <select id="selectFollowersPage" resultMap="followUserMap">
+        SELECT f.create_time       AS follow_time,
+               u.id                AS uid,
+               u.username          AS username,
+               u.nickname          AS nickname,
+               u.avatar            AS avatar,
+               (f2.id IS NOT NULL) AS followed
+        FROM life_social.life_follow f
+                 INNER JOIN life_social.life_user u
+                            ON u.id = f.user_id AND u.deleted = 0
+                 LEFT JOIN life_social.life_follow f2
+                           ON f2.user_id = #{me}
+                               AND f2.follow_user_id = f.user_id
+                               AND f2.deleted = 0
+        WHERE f.follow_user_id = #{owner}
+          AND f.deleted = 0
+        ORDER BY f.create_time DESC, f.id DESC
+    </select>
+</mapper>

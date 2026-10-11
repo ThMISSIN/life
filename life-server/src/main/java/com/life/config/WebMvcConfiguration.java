@@ -33,7 +33,7 @@ public class WebMvcConfiguration implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(jwtTokenUserInterceptor)
-                .addPathPatterns("/user/**", "/benefit/**", "/admin/**", "/signRecord/**", "/points/**", "/post/**")
+                .addPathPatterns("/user/**", "/benefit/**", "/admin/**", "/signRecord/**", "/points/**", "/post/**", "/follow/**")
                 .excludePathPatterns(
                         "/user/user/login",
                         "/user/user/register",
