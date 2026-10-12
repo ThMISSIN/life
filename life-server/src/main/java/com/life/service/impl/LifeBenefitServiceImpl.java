@@ -4,7 +4,11 @@ import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.life.constant.BenefitConstant;
 import com.life.constant.MessageConstant;
+import com.life.constant.PointsTypeConstant;
+import com.life.constant.StatusConstant;
+import com.life.constant.UserBenefitStatusConstant;
 import com.life.context.BaseContext;
 import com.life.entity.LifeBenefit;
 import com.life.entity.LifePointsRecord;
@@ -34,11 +38,6 @@ import java.util.UUID;
 @Service
 public class LifeBenefitServiceImpl extends ServiceImpl<LifeBenefitMapper, LifeBenefit> implements LifeBenefitService {
 
-    /**
-     * 用户权益状态: 已作废(不计入限兑次数)
-     */
-    private static final Integer USER_BENEFIT_STATUS_VOIDED = 4;
-
     @Autowired
     private UserMapper userMapper;
     @Autowired
@@ -63,14 +62,14 @@ public class LifeBenefitServiceImpl extends ServiceImpl<LifeBenefitMapper, LifeB
         // 查询所有权益
         LifeBenefit benefit = getById(id);
         // 过滤不存在 以及 未上架 权益
-        if (benefit == null || benefit.getStatus() == null || benefit.getStatus() != 1) {
+        if (benefit == null || benefit.getStatus() == null || benefit.getStatus() != BenefitConstant.LISTED) {
             throw new ValidationException(MessageConstant.BENEFIT_NOT_FOUND);
         }
         // 查询出用户已兑换次数
         Long myExchangedCount = lifeUserBenefitMapper.selectCount(new LambdaQueryWrapper<LifeUserBenefit>()
                 .eq(LifeUserBenefit::getUserId, BaseContext.getCurrentId())
                 .eq(LifeUserBenefit::getBenefitId, id)
-                .ne(LifeUserBenefit::getStatus, USER_BENEFIT_STATUS_VOIDED));
+                .ne(LifeUserBenefit::getStatus, UserBenefitStatusConstant.VOIDED));
 
         // 是否 限购
         boolean limitReached = benefit.getPerUserLimit() != null
@@ -135,7 +134,7 @@ public class LifeBenefitServiceImpl extends ServiceImpl<LifeBenefitMapper, LifeB
     public void removeBenefit(Long id) {
         Long count = lifeUserBenefitMapper.selectCount(new LambdaQueryWrapper<LifeUserBenefit>()
                 .eq(LifeUserBenefit::getBenefitId, id)
-                .in(LifeUserBenefit::getStatus, 0, 1));
+                .in(LifeUserBenefit::getStatus, UserBenefitStatusConstant.PENDING, UserBenefitStatusConstant.UNUSED));
         if (count > 0) {
             throw new ValidationException(MessageConstant.BENEFIT_BE_USED);
         }
@@ -150,12 +149,12 @@ public class LifeBenefitServiceImpl extends ServiceImpl<LifeBenefitMapper, LifeB
         // 当权益不存在或者未上架时, 禁止兑换
         LifeBenefit benefit = getById(id);
         Long userId = BaseContext.getCurrentId();
-        if (benefit == null || benefit.getStatus() == null || benefit.getStatus() != 1) {
+        if (benefit == null || benefit.getStatus() == null || benefit.getStatus() != BenefitConstant.LISTED) {
             throw new ValidationException(MessageConstant.BENEFIT_NOT_FOUND);
         }
         // 查询用户
         LifeUser user = userMapper.selectById(userId);
-        if (user == null || user.getStatus() == 0) {
+        if (user == null || !StatusConstant.ENABLE.equals(user.getStatus())) {
             throw new ValidationException("用户不存在或已禁用");
         }
         // 当用户等级不足时, 禁止兑换
@@ -175,7 +174,7 @@ public class LifeBenefitServiceImpl extends ServiceImpl<LifeBenefitMapper, LifeB
         }
 
         // 固定截止日的权益已过期的, 禁止兑换(需在扣积分前拦截, 避免发出即过期的券)
-        if (benefit.getValidType() != null && benefit.getValidType() == 2
+        if (benefit.getValidType() != null && benefit.getValidType() == BenefitConstant.VALID_FIXED
                 && benefit.getFixedEndTime() != null && !benefit.getFixedEndTime().isAfter(LocalDateTime.now())) {
             throw new ValidationException(MessageConstant.BENEFIT_ALREADY_EXPIRED);
         }
@@ -184,7 +183,8 @@ public class LifeBenefitServiceImpl extends ServiceImpl<LifeBenefitMapper, LifeB
         if (userMapper.deductPoints(userId, benefit.getPointsPrice()) == 0) {
             throw new ValidationException(MessageConstant.USER_POINTS_NOT_ENOUGH);
         }
-        pointsRecordMapper.insert(LifePointsRecord.builder().userId(userId).type(6).points(-benefit.getPointsPrice()).build());
+        pointsRecordMapper.insert(LifePointsRecord.builder().userId(userId)
+                .type(PointsTypeConstant.EXCHANGE).points(-benefit.getPointsPrice()).build());
 
         // 2. 原子扣库存+加销量(不限量跳过扣减只加sales)
         if (benefit.getStock() != null && benefit.getStock() > 0
@@ -219,12 +219,12 @@ public class LifeBenefitServiceImpl extends ServiceImpl<LifeBenefitMapper, LifeB
         // 有效期配置缺失的权益不允许发放, 否则expire_time非空约束会导致发放失败
         if (benefit.getValidType() == null) {
             throw new ValidationException(MessageConstant.BENEFIT_VALID_CONFIG_ERROR);
-        } else if (benefit.getValidType() == 1) {
+        } else if (benefit.getValidType() == BenefitConstant.VALID_ROLLING) {
             if (benefit.getValidDays() == null || benefit.getValidDays() <= 0) {
                 throw new ValidationException(MessageConstant.BENEFIT_VALID_CONFIG_ERROR);
             }
             expireTime = now.plusDays(benefit.getValidDays());
-        } else if (benefit.getValidType() == 2) {
+        } else if (benefit.getValidType() == BenefitConstant.VALID_FIXED) {
             if (benefit.getFixedEndTime() == null) {
                 throw new ValidationException(MessageConstant.BENEFIT_VALID_CONFIG_ERROR);
             }
@@ -242,8 +242,7 @@ public class LifeBenefitServiceImpl extends ServiceImpl<LifeBenefitMapper, LifeB
         userBenefit.setCode(UUID.randomUUID().toString().replace("-", ""));
         userBenefit.setEffectiveTime(now);
         userBenefit.setExpireTime(expireTime);
-        // 1-未使用
-        userBenefit.setStatus(1);
+        userBenefit.setStatus(UserBenefitStatusConstant.UNUSED);
         return userBenefit;
     }
 
@@ -251,7 +250,7 @@ public class LifeBenefitServiceImpl extends ServiceImpl<LifeBenefitMapper, LifeB
         LambdaQueryWrapper<LifeUserBenefit> eq = new LambdaQueryWrapper<LifeUserBenefit>()
                 .eq(LifeUserBenefit::getUserId, userId)
                 .eq(LifeUserBenefit::getBenefitId, id)
-                .ne(LifeUserBenefit::getStatus, USER_BENEFIT_STATUS_VOIDED);
+                .ne(LifeUserBenefit::getStatus, UserBenefitStatusConstant.VOIDED);
         return lifeUserBenefitMapper.selectCount(eq);
     }
 }

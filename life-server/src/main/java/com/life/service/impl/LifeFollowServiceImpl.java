@@ -3,10 +3,10 @@ package com.life.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.life.constant.LogicDeleteConstant;
 import com.life.context.BaseContext;
 import com.life.entity.LifeFollow;
 import com.life.exception.UserInfoNotFoundException;
-import com.life.exception.UserNotLoginException;
 import com.life.exception.ValidationException;
 import com.life.mapper.LifeFollowMapper;
 import com.life.query.FollowQueryDTO;
@@ -27,7 +27,7 @@ public class LifeFollowServiceImpl extends ServiceImpl<LifeFollowMapper, LifeFol
 
     @Override
     public FollowResultVO follow(Long followUserId) {
-        Long me = requireUserId();
+        Long me = BaseContext.getCurrentId();
         if (me.equals(followUserId)) {
             throw new ValidationException("不能关注自己");
         }
@@ -47,7 +47,7 @@ public class LifeFollowServiceImpl extends ServiceImpl<LifeFollowMapper, LifeFol
             } catch (DuplicateKeyException e) {
                 // 并发双击: 另一线程已插入, 本次视为幂等成功
             }
-        } else if (row.getDeleted() != null && row.getDeleted() == 1) {
+        } else if (row.getDeleted() != null && row.getDeleted() == LogicDeleteConstant.DELETED) {
             // 取关后再关注: 复活尸体行(UPDATE deleted=0, 不能插新行(必撞唯一键))
             baseMapper.reviveByUserIdAndFollowUserId(me, followUserId);
         }
@@ -57,7 +57,7 @@ public class LifeFollowServiceImpl extends ServiceImpl<LifeFollowMapper, LifeFol
 
     @Override
     public FollowResultVO unfollow(Long followUserId) {
-        Long me = requireUserId();
+        Long me = BaseContext.getCurrentId();
         if (me.equals(followUserId)) {
             throw new ValidationException("不能取关自己");
         }
@@ -71,7 +71,7 @@ public class LifeFollowServiceImpl extends ServiceImpl<LifeFollowMapper, LifeFol
 
     @Override
     public PageResult followingList(FollowQueryDTO queryDTO) {
-        Long me = requireUserId();
+        Long me = BaseContext.getCurrentId();
         Long owner = queryDTO.getUserId() == null ? me : queryDTO.getUserId();
         // 查询关注列表
         Page<FollowUserVO> page = new Page<>(queryDTO.getPageNum(), queryDTO.getPageSize());
@@ -81,7 +81,7 @@ public class LifeFollowServiceImpl extends ServiceImpl<LifeFollowMapper, LifeFol
 
     @Override
     public PageResult followersList(FollowQueryDTO queryDTO) {
-        Long me = requireUserId();
+        Long me = BaseContext.getCurrentId();
         Long owner = queryDTO.getUserId() == null ? me : queryDTO.getUserId();
         // 查询粉丝列表
         Page<FollowUserVO> page = new Page<>(queryDTO.getPageNum(), queryDTO.getPageSize());
@@ -91,7 +91,7 @@ public class LifeFollowServiceImpl extends ServiceImpl<LifeFollowMapper, LifeFol
 
     @Override
     public Boolean isFollowed(Long followUserId) {
-        Long me = requireUserId();
+        Long me = BaseContext.getCurrentId();
         if (me.equals(followUserId)) {
             return false;
         }
@@ -101,17 +101,6 @@ public class LifeFollowServiceImpl extends ServiceImpl<LifeFollowMapper, LifeFol
     }
 
     // ============ 私有方法 ============
-
-    /**
-     * 取当前登录用户ID, 拦截器兜底
-     */
-    private Long requireUserId() {
-        Long userId = BaseContext.getCurrentId();
-        if (userId == null) {
-            throw new UserNotLoginException("用户未登录或登录已过期");
-        }
-        return userId;
-    }
 
     /**
      * 关注动作后返回双方最新计数

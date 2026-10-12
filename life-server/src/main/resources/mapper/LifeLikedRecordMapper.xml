@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.life.mapper.LifeLikedRecordMapper">
+
+    <!-- 按业务批量物理删除: 定时任务用Redis快照全量重建这些biz的点赞行,
+         不能用MP的remove(逻辑删除), 否则尸体行占住uk_user_biz让saveBatch撞键 -->
+    <delete id="deleteByBiz">
+        DELETE FROM life_social.life_liked_record
+        WHERE biz_type = #{bizType}
+          AND biz_id IN
+        <foreach collection="bizIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+</mapper>

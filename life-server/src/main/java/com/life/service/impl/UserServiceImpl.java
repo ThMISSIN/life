@@ -2,7 +2,10 @@ package com.life.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.life.constant.JwtClaimsConstant;
+import com.life.constant.PasswordConstant;
 import com.life.constant.RedisKeyConstant;
+import com.life.constant.RegexConstant;
+import com.life.constant.StatusConstant;
 import com.life.context.BaseContext;
 import com.life.dto.LoginDTO;
 import com.life.dto.RegisterDTO;
@@ -64,7 +67,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, LifeUser> implement
         }
 
         // 3.账号状态校验
-        if (user.getStatus() != 1) {
+        if (!StatusConstant.ENABLE.equals(user.getStatus())) {
             throw new AccountLockedException("账号已被禁用，请联系管理员");
         }
 
@@ -114,7 +117,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, LifeUser> implement
         registerDTO.setPhone(phone);
 
         // 校验手机号
-        String phoneRegex = "^(?:(?:\\+|00)86)?1[3-9]\\d{9}$";
+        String phoneRegex = RegexConstant.PHONE;
         boolean b1 = phone.trim().matches(phoneRegex);
         if (!b1) {
             throw new ValidationException("手机号格式有误");
@@ -122,7 +125,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, LifeUser> implement
 
         // 校验邮箱（非必填，填写时需校验格式）
         if (email != null && !email.isBlank()) {
-            String emailRegex = "^(([^<>()\\\\.,;:\\s@\"]+(\\.[^<>()\\\\.,;:\\s@\"]+)*)|(\".+\"))@((\\[[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\])|(([a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,}))$";
+            String emailRegex = RegexConstant.EMAIL;
             boolean b2 = email.trim().matches(emailRegex);
             if (!b2) {
                 throw new ValidationException("邮箱格式有误");
@@ -140,7 +143,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, LifeUser> implement
             throw new UserAlreadyExistsException("邮箱已被使用");
         }
 
-        registerDTO.setPassword(BCrypt.hashpw(rawPassword,BCrypt.gensalt(10)));
+        registerDTO.setPassword(BCrypt.hashpw(rawPassword,BCrypt.gensalt(PasswordConstant.HASH_COST)));
 
         // 新增用户
         userMapper.saveUser(registerDTO);
@@ -171,14 +174,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, LifeUser> implement
         }
 
         // 4.账号状态校验
-        if (user.getStatus() != 1) {
+        if (!StatusConstant.ENABLE.equals(user.getStatus())) {
             throw new AccountLockedException("账号已被禁用，请联系管理员");
         }
 
         // 5.重置密码
         LifeUser updateUser = new LifeUser();
         updateUser.setId(user.getId());
-        updateUser.setPassword(BCrypt.hashpw(password, BCrypt.gensalt(10)));
+        updateUser.setPassword(BCrypt.hashpw(password, BCrypt.gensalt(PasswordConstant.HASH_COST)));
         userMapper.updateById(updateUser);
 
         return Result.success("密码重置成功");

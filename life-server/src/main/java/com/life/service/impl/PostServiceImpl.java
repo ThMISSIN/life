@@ -3,6 +3,8 @@ package com.life.service.impl;
 import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.life.constant.PostStatusConstant;
+import com.life.constant.RedisKeyConstant;
 import com.life.context.BaseContext;
 import com.life.dto.PostPublishDTO;
 import com.life.entity.LifePost;
@@ -11,6 +13,7 @@ import com.life.exception.BaseException;
 import com.life.exception.UserNotLoginException;
 import com.life.exception.ValidationException;
 import com.life.mapper.LifePostMapper;
+import com.life.result.Result;
 import com.life.service.PostService;
 import com.life.service.UserService;
 import com.life.vo.AuthorVO;
@@ -31,8 +34,6 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
     private UserService userService;
     @Autowired
     private StringRedisTemplate redisTemplate;
-
-    private static final String REDIS_KEY="post:draft:uid:{userId}";
 
     // @Override
     // public PostVO publishPost(PostPublishDTO postDTO) {
@@ -195,7 +196,7 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
         }
 
         // 2. 获取当前登录用户(拦截器未覆盖或token失效时兜底)
-        Long userId = requireUserId();
+        Long userId = BaseContext.getCurrentId();
         LifeUser user = userService.getById(userId);
         if (user == null) {
             throw new UserNotLoginException("用户不存在");
@@ -203,7 +204,7 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
 
         // 3. 封装实体(BeanUtils会跳过类型不匹配的images, 单独序列化为JSON)
         LifePost post = buildPostEntity(postDTO, userId);
-        post.setStatus(1);
+        post.setStatus(PostStatusConstant.PUBLISHED);
         post.setViewCount(0);
         post.setLikeCount(0);
         post.setCommentCount(0);
@@ -244,7 +245,7 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
 
     @Override
     public PostVO saveDraft(PostPublishDTO postDTO) {
-        Long userId = requireUserId();
+        Long userId = BaseContext.getCurrentId();
 
         // 1. 草稿校验宽松: content可不填, 但title/content/images至少要有一个有值
         boolean empty = isBlank(postDTO.getContent()) && isBlank(postDTO.getTitle())
@@ -257,7 +258,8 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
 
         // 3. 非空则只缓存DTO(前端关心的最小载荷), 丢弃无意义的id字段
         postDTO.setId(null);
-        redisTemplate.opsForValue().set(draftKey(userId), JSON.toJSONString(postDTO), 30, TimeUnit.DAYS);
+        redisTemplate.opsForValue().set(draftKey(userId), JSON.toJSONString(postDTO),
+                RedisKeyConstant.POST_DRAFT_TTL_DAYS, TimeUnit.DAYS);
 
         // 4. 返回草稿VO(无id, Redis草稿仅用于回填编辑器)
         return toDraftVO(postDTO);
@@ -265,7 +267,7 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
 
     @Override
     public PostVO getDraft() {
-        Long userId = requireUserId();
+        Long userId = BaseContext.getCurrentId();
         String jsonStr = redisTemplate.opsForValue().get(draftKey(userId));
         // 无草稿是正常态, 返回null由前端判空回填
         if (jsonStr == null) {
@@ -288,12 +290,12 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
 
     @Override
     public void clearDraft() {
-        redisTemplate.delete(draftKey(requireUserId()));
+        redisTemplate.delete(draftKey(BaseContext.getCurrentId()));
     }
 
     @Override
     public void deletePostById(Long postId) {
-        Long userId = requireUserId();
+        Long userId = BaseContext.getCurrentId();
         // 归属校验放进DELETE条件, 单条语句原子完成, 消除查后删两步间的竞态(P2优化)
         boolean removed = remove(new LambdaQueryWrapper<LifePost>()
                 .eq(LifePost::getId, postId)
@@ -304,17 +306,6 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
     }
 
     // ============ 私有方法 ============
-
-    /**
-     * 取当前登录用户ID, 拦截器兜底
-     */
-    private Long requireUserId() {
-        Long userId = BaseContext.getCurrentId();
-        if (userId == null) {
-            throw new UserNotLoginException("用户未登录或登录已过期");
-        }
-        return userId;
-    }
 
     /**
      * DTO转实体公共部分: userId + 各字段拷贝 + images序列化 + status=1(发布默认)
@@ -332,7 +323,7 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
      * 草稿Redis key: post:draft:uid{userId}, 与签到sign:uid命名对齐(P2抽公共)
      */
     private String draftKey(Long userId) {
-        return REDIS_KEY.replace("{userId}", userId.toString());
+        return RedisKeyConstant.POST_DRAFT.replace("{userId}", userId.toString());
     }
 
     // private void clearDraftByUser(Long userId) {
@@ -351,7 +342,7 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
                 .content(dto.getContent())
                 .images(dto.getImages())
                 .category(dto.getCategory())
-                .status(0)
+                .status(PostStatusConstant.DRAFT)
                 .build();
     }
 

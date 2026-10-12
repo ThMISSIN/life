@@ -3,6 +3,7 @@ package com.life.service.impl;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.life.constant.PointsTypeConstant;
 import com.life.context.BaseContext;
 import com.life.entity.LifePointsRecord;
 import com.life.mapper.LifePointsRecordMapper;
@@ -29,7 +30,7 @@ public class LifePointsRecordServiceImpl extends ServiceImpl<LifePointsRecordMap
         LifePointsRecord record = LifePointsRecord.builder()
                 .userId(userId)
                 .points(points)
-                .type(1)
+                .type(PointsTypeConstant.SIGN)
                 .build();
         save(record);
     }

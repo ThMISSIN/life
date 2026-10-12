@@ -2,7 +2,9 @@ package com.life.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.life.constant.CategoryConstant;
 import com.life.constant.MessageConstant;
+import com.life.constant.StatusConstant;
 import com.life.entity.LifeBenefit;
 import com.life.entity.LifeBenefitCategory;
 import com.life.exception.ValidationException;
@@ -26,14 +28,14 @@ public class LifeBenefitCategoryServiceImpl extends ServiceImpl<LifeBenefitCateg
     public List<LifeBenefitCategoryVO> getCategoryTree() {
         // 查询所有 分类(deleted由MP逻辑删除自动过滤)
         LambdaQueryWrapper<LifeBenefitCategory> eq = new LambdaQueryWrapper<LifeBenefitCategory>()
-                .eq(LifeBenefitCategory::getStatus, 1)
+                .eq(LifeBenefitCategory::getStatus, StatusConstant.ENABLE)
                 .orderByAsc(LifeBenefitCategory::getSort);
 
         List<LifeBenefitCategory> categories = baseMapper.selectList(eq);
 
         // 过滤出所有一级分类
         List<LifeBenefitCategory> rootList = categories.stream()
-                .filter(c -> c.getParentId() == 0)
+                .filter(c -> c.getParentId() == CategoryConstant.ROOT_PARENT_ID)
                 .toList();
 
         // 找出一级分类下的所有二级分类
@@ -131,9 +133,9 @@ public class LifeBenefitCategoryServiceImpl extends ServiceImpl<LifeBenefitCateg
      */
     private void checkParent(LifeBenefitCategory lifeBenefitCategory) {
         Long parentId = lifeBenefitCategory.getParentId();
-        if (parentId == null || parentId == 0) {
-            lifeBenefitCategory.setParentId(0L);
-            lifeBenefitCategory.setLevel(1);
+        if (parentId == null || parentId == CategoryConstant.ROOT_PARENT_ID) {
+            lifeBenefitCategory.setParentId(CategoryConstant.ROOT_PARENT_ID);
+            lifeBenefitCategory.setLevel(CategoryConstant.LEVEL_FIRST);
             return;
         }
         // 不能把自己挂到自己的子级
@@ -141,9 +143,9 @@ public class LifeBenefitCategoryServiceImpl extends ServiceImpl<LifeBenefitCateg
             throw new ValidationException(MessageConstant.CATEGORY_PARENT_ERROR);
         }
         LifeBenefitCategory parent = baseMapper.selectById(parentId);
-        if (parent == null || parent.getParentId() != 0) {
+        if (parent == null || parent.getParentId() != CategoryConstant.ROOT_PARENT_ID) {
             throw new ValidationException(MessageConstant.CATEGORY_PARENT_ERROR);
         }
-        lifeBenefitCategory.setLevel(2);
+        lifeBenefitCategory.setLevel(CategoryConstant.LEVEL_SECOND);
     }
 }

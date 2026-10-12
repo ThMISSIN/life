@@ -26,7 +26,7 @@ public class LifeLikedRecord extends BaseEntity {
     private Long bizId;
 
     /**
-     * 业务类型: 1-帖子, 2-评论, 3-权益, 4-商品, 5-活动
+     * 业务类型: POST-帖子, COMMENT-评论, BENEFIT-权益, GOODS-商品, ACTIVITY-活动
      */
-    private Integer bizType;
+    private String bizType;
 }

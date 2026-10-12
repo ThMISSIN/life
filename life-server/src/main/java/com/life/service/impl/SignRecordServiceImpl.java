@@ -1,5 +1,7 @@
 package com.life.service.impl;
 
+import com.life.constant.RedisKeyConstant;
+import com.life.constant.SignRewardConstant;
 import com.life.context.BaseContext;
 import com.life.entity.BaseEntity;
 import com.life.entity.SignResultVO;
@@ -31,8 +33,8 @@ public class SignRecordServiceImpl implements SignRecordService {
         // 获取当前日期
         LocalDate now = LocalDate.now();
         // key
-        String key = "sign:uid" + userId
-                + now.format(DateTimeFormatter.ofPattern("yyyy:MM"));
+        String key = RedisKeyConstant.SIGN_RECORD + userId
+                + now.format(DateTimeFormatter.ofPattern(RedisKeyConstant.SIGN_MONTH_FORMAT));
         // 计算offset
         int offset = now.getDayOfMonth() - 1;
         // 使用redis bitmap 记录签到信息
@@ -47,19 +49,19 @@ public class SignRecordServiceImpl implements SignRecordService {
         // 奖励分数
         int rewardPoints = 0;
         switch (continueDays) {
-            case 7:
-                rewardPoints = 10;
+            case SignRewardConstant.CONTINUE_DAYS_7:
+                rewardPoints = SignRewardConstant.REWARD_POINTS_7;
                 break;
-            case 14:
-                rewardPoints = 20;
+            case SignRewardConstant.CONTINUE_DAYS_14:
+                rewardPoints = SignRewardConstant.REWARD_POINTS_14;
                 break;
-            case 28:
-                rewardPoints = 40;
+            case SignRewardConstant.CONTINUE_DAYS_28:
+                rewardPoints = SignRewardConstant.REWARD_POINTS_28;
                 break;
         }
 
         // TODO 后续升级为 rabbitMq
-        lifePointsRecordService.addSignRecord(userId, rewardPoints + 1);
+        lifePointsRecordService.addSignRecord(userId, rewardPoints + SignRewardConstant.BASE_POINTS);
 
         SignResultVO vo = new SignResultVO();
         vo.setSignDays(continueDays);
@@ -75,8 +77,8 @@ public class SignRecordServiceImpl implements SignRecordService {
         LocalDate now = LocalDate.now();
         // 获取登录用户
         Long userId = BaseContext.getCurrentId();
-        String key = "sign:uid" + userId
-                + now.format(DateTimeFormatter.ofPattern("yyyy:MM"));
+        String key = RedisKeyConstant.SIGN_RECORD + userId
+                + now.format(DateTimeFormatter.ofPattern(RedisKeyConstant.SIGN_MONTH_FORMAT));
 
         int dayOfMonth = now.getDayOfMonth();
 

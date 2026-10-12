@@ -3,6 +3,7 @@ package com.life.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.life.dto.PostPublishDTO;
 import com.life.entity.LifePost;
+import com.life.result.Result;
 import com.life.vo.PostVO;
 
 public interface PostService extends IService<LifePost> {
@@ -20,4 +21,5 @@ public interface PostService extends IService<LifePost> {
 
     // 清理当前用户全部草稿(幂等, 无草稿不报错)
     void clearDraft();
+
 }
