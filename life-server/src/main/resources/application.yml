@@ -12,10 +12,11 @@ spring:
     username: ${life.datasource.username}
     password: ${life.datasource.password}
   data:
-    host: ${life.redis.host}
-    port: ${life.redis.port}
-    password: ${life.redis.password}
-    database: ${life.redis.database}
+    redis:
+      host: ${life.redis.host}
+      port: ${life.redis.port}
+      password: ${life.redis.password}
+      database: ${life.redis.database}
 
 mybatis-plus:
   #mapper配置文件

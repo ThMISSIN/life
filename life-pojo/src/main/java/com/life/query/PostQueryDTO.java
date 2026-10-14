@@ -29,4 +29,9 @@ public class PostQueryDTO extends QueryDTO {
      * 关键词, 按标题/内容模糊搜索
      */
     private String keyword;
+
+    /**
+     * 当前登录用户ID: 服务层强制覆盖(关注流子查询用), 不信任前端传值
+     */
+    private Long currentUserId;
 }

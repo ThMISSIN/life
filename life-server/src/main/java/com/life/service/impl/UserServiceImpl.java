@@ -48,6 +48,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, LifeUser> implement
     private JwtProperties jwtProperties;
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
+    @Autowired
+    private com.life.mapper.LifeFollowMapper lifeFollowMapper;
 
     @Override
     public LoginVO login(LoginDTO userLoginDTO, HttpServletRequest request) {
@@ -252,6 +254,33 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, LifeUser> implement
         userVO.setStatus(user.getStatus());
         userVO.setLastLoginTime(user.getLastLoginTime());
         userVO.setLoginCount(user.getLoginCount());
+        return userVO;
+    }
+
+    @Override
+    public UserVO getUserDetail(Long userId) {
+        LifeUser user = this.getById(userId);
+        if (user == null) {
+            throw new UserInfoNotFoundException("用户不存在");
+        }
+        UserVO userVO = new UserVO();
+        // 公开资料: 不含手机号/邮箱等敏感字段
+        userVO.setId(user.getId());
+        userVO.setUsername(user.getUsername());
+        userVO.setNickname(user.getNickname());
+        userVO.setAvatar(user.getAvatar());
+        userVO.setUserType(user.getUserType());
+        userVO.setPoints(user.getPoints());
+        userVO.setLevel(user.getLevel());
+        userVO.setFollowingCount((int) lifeFollowMapper.countFollowingValid(userId));
+        userVO.setFollowerCount((int) lifeFollowMapper.countFollowersValid(userId));
+
+        Long me = BaseContext.getCurrentId();
+        if (me != null && !me.equals(userId)) {
+            userVO.setFollowed(lifeFollowMapper.exists(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.life.entity.LifeFollow>()
+                    .eq(com.life.entity.LifeFollow::getUserId, me)
+                    .eq(com.life.entity.LifeFollow::getFollowUserId, userId)));
+        }
         return userVO;
     }
 

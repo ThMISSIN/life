@@ -1,4 +1,33 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/3.0/mybatis-3-mapper.dtd" >
 <mapper namespace="com.life.mapper.LifePostMapper">
+
+    <!-- 帖子分页列表: 仅已发布(status=1)且未删除;
+         type=2 关注流只看我关注的人发的帖; userId 查指定用户; keyword 标题/内容模糊搜索;
+         currentUserId 由服务层从登录态强制注入, 防前端伪造 -->
+    <select id="queryPostPage" resultType="com.life.entity.LifePost">
+        select p.*
+        from life_post p
+        where p.deleted = 0
+          and p.status = 1
+        <if test="query.userId != null">
+            and p.user_id = #{query.userId}
+        </if>
+        <if test="query.type != null and query.type == 2">
+            and p.user_id in (
+                select f.follow_user_id
+                from life_follow f
+                where f.user_id = #{query.currentUserId}
+                  and f.deleted = 0
+            )
+        </if>
+        <if test="query.category != null and query.category != ''">
+            and p.category = #{query.category}
+        </if>
+        <if test="query.keyword != null and query.keyword != ''">
+            and (p.title like concat('%', #{query.keyword}, '%')
+                 or p.content like concat('%', #{query.keyword}, '%'))
+        </if>
+        order by p.create_time desc, p.id desc
+    </select>
 </mapper>

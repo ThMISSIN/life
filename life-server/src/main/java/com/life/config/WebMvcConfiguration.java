@@ -1,10 +1,12 @@
 package com.life.config;
 
-import com.life.interceptor.JwtTokenUserInterceptor;
+import com.life.interceptor.JwtUserInterceptor;
 import com.life.json.JacksonObjectMapper;
+import com.life.properties.JwtProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
@@ -20,7 +22,10 @@ import java.util.List;
 public class WebMvcConfiguration implements WebMvcConfigurer {
 
     @Autowired
-    private JwtTokenUserInterceptor jwtTokenUserInterceptor;
+    private JwtProperties jwtProperties;
+
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
 
     /**
      * 注册自定义拦截器：需登录的接口（token校验+登出黑名单校验），
@@ -32,13 +37,18 @@ public class WebMvcConfiguration implements WebMvcConfigurer {
      */
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(jwtTokenUserInterceptor)
-                .addPathPatterns("/user/**", "/benefit/**", "/admin/**", "/signRecord/**", "/points/**", "/post/**", "/follow/**", "/like/**")
+        // 实例1：必登录拦截器，游客或无效令牌401
+        registry.addInterceptor(new JwtUserInterceptor(jwtProperties, stringRedisTemplate, true))
+                .addPathPatterns("/user/**", "/benefit/**", "/admin/**", "/signRecord/**", "/points/**", "/post/**", "/follow/**", "/like/**", "/product/**", "/replies/**")
                 .excludePathPatterns(
                         "/user/user/login",
                         "/user/user/register",
                         "/user/user/forget",
-                        "/user/user/logout");
+                        "/user/user/logout",
+                        "/replies/page");
+        // 实例2：可选登录拦截器，带有效令牌则解析用户身份，否则按匿名放行
+        registry.addInterceptor(new JwtUserInterceptor(jwtProperties, stringRedisTemplate, false))
+                .addPathPatterns("/replies/page");
     }
 
     /**

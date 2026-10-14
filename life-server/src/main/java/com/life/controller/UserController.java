@@ -74,6 +74,17 @@ public class UserController {
     }
 
     /**
+     * 获取指定用户的公开资料(用户主页: 昵称/头像/等级/关注粉丝数/关注状态)
+     * @param userId 目标用户ID
+     * @return
+     */
+    @GetMapping("/{userId}")
+    public Result<UserVO> getUserDetail(@PathVariable Long userId) {
+        UserVO userVO = userService.getUserDetail(userId);
+        return Result.success(userVO);
+    }
+
+    /**
      * 修改用户信息（昵称、头像、手机号、邮箱）
      * @param userUpdateDTO
      * @return

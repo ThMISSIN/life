@@ -21,5 +21,8 @@ public interface UserService extends IService<LifeUser> {
 
     UserVO getUserInfo();
 
+    // 用户主页公开资料(不含手机号/邮箱), 附关注/粉丝计数与当前用户关注状态
+    UserVO getUserDetail(Long userId);
+
     Result updateUser(UserUpdateDTO userUpdateDTO);
 }

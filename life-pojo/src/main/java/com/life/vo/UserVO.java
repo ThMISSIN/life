@@ -68,4 +68,19 @@ public class UserVO {
      * 登录次数
      */
     private Integer loginCount;
+
+    /**
+     * 关注数(仅用户主页详情接口返回)
+     */
+    private Integer followingCount;
+
+    /**
+     * 粉丝数(仅用户主页详情接口返回)
+     */
+    private Integer followerCount;
+
+    /**
+     * 当前登录用户是否已关注TA(仅用户主页详情接口返回, 看自己时为null)
+     */
+    private Boolean followed;
 }

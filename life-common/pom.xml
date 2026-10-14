@@ -86,6 +86,12 @@
             <artifactId>mybatis-plus-jsqlparser</artifactId>
             <version>3.5.16</version>
         </dependency>
+
+        <!-- bean validation（jakarta.validation，EnumValidator 等需要） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
     </dependencies>
 
 </project>

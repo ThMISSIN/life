@@ -1,7 +1,9 @@
 package com.life.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.life.entity.LifePost;
+import com.life.query.PostQueryDTO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Update;
@@ -14,4 +16,9 @@ public interface LifePostMapper extends BaseMapper<LifePost> {
      */
     @Update("UPDATE life_post SET like_count = #{likedTimes} WHERE id = #{bizId}")
     int updateLikeCount(@Param("bizId") Long bizId, @Param("likedTimes") Integer likedTimes);
+
+    /**
+     * 帖子分页列表(信息流/用户动态), SQL在LifePostMapper.xml
+     */
+    Page<LifePost> queryPostPage(Page<LifePost> page, @Param("query") PostQueryDTO query);
 }

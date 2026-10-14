@@ -2,18 +2,25 @@ package com.life.service.impl;
 
 import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.life.constant.BizTypeConstant;
 import com.life.constant.PostStatusConstant;
 import com.life.constant.RedisKeyConstant;
 import com.life.context.BaseContext;
 import com.life.dto.PostPublishDTO;
+import com.life.entity.LifeFollow;
 import com.life.entity.LifePost;
 import com.life.entity.LifeUser;
 import com.life.exception.BaseException;
 import com.life.exception.UserNotLoginException;
 import com.life.exception.ValidationException;
+import com.life.mapper.LifeFollowMapper;
 import com.life.mapper.LifePostMapper;
+import com.life.query.PostQueryDTO;
+import com.life.result.PageResult;
 import com.life.result.Result;
+import com.life.service.LikeService;
 import com.life.service.PostService;
 import com.life.service.UserService;
 import com.life.vo.AuthorVO;
@@ -24,8 +31,13 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> implements PostService {
@@ -34,6 +46,10 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
     private UserService userService;
     @Autowired
     private StringRedisTemplate redisTemplate;
+    @Autowired
+    private LikeService likeService;
+    @Autowired
+    private LifeFollowMapper lifeFollowMapper;
 
     // @Override
     // public PostVO publishPost(PostPublishDTO postDTO) {
@@ -305,6 +321,62 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
         }
     }
 
+    @Override
+    public PageResult pageQuery(PostQueryDTO query) {
+        Long me = BaseContext.getCurrentId();
+        // 关注流子查询依赖登录态, 强制覆盖防前端伪造
+        query.setCurrentUserId(me);
+
+        Page<LifePost> page = new Page<>(query.getPageNum(), query.getPageSize());
+        Page<LifePost> resultPage = baseMapper.queryPostPage(page, query);
+        List<LifePost> posts = resultPage.getRecords();
+        if (posts == null || posts.isEmpty()) {
+            return new PageResult(resultPage.getTotal(), List.of());
+        }
+
+        // 批量组装: 作者信息 / 我是否已关注 / 我是否已点赞(Redis实时)
+        List<Long> authorIds = posts.stream().map(LifePost::getUserId).distinct().toList();
+        Map<Long, LifeUser> userMap = userService.listByIds(authorIds).stream()
+                .collect(Collectors.toMap(LifeUser::getId, Function.identity()));
+
+        Set<Long> followedIds = lifeFollowMapper.selectList(new LambdaQueryWrapper<LifeFollow>()
+                        .select(LifeFollow::getFollowUserId)
+                        .eq(LifeFollow::getUserId, me)
+                        .in(LifeFollow::getFollowUserId, authorIds))
+                .stream().map(LifeFollow::getFollowUserId).collect(Collectors.toSet());
+
+        List<Long> postIds = posts.stream().map(LifePost::getId).toList();
+        Set<Long> likedIds = new HashSet<>(likeService.isBizLiked(BizTypeConstant.POST, postIds));
+
+        List<PostVO> vos = posts.stream().map(p -> {
+            LifeUser u = userMap.get(p.getUserId());
+            AuthorVO author = AuthorVO.builder()
+                    .userId(p.getUserId())
+                    .username(u == null ? "" : u.getUsername())
+                    .nickname(u == null ? "用户已注销" : u.getNickname())
+                    .avatar(u == null ? null : u.getAvatar())
+                    .followed(followedIds.contains(p.getUserId()))
+                    .build();
+            return PostVO.builder()
+                    .id(p.getId())
+                    .author(author)
+                    .title(p.getTitle())
+                    .content(p.getContent())
+                    .images(parseImages(p.getImages()))
+                    .category(p.getCategory())
+                    .viewCount(p.getViewCount())
+                    .likeCount(p.getLikeCount())
+                    .commentCount(p.getCommentCount())
+                    .repostCount(0)
+                    .liked(likedIds.contains(p.getId()))
+                    .status(p.getStatus())
+                    .createTime(p.getCreateTime())
+                    .build();
+        }).toList();
+
+        return new PageResult(resultPage.getTotal(), vos);
+    }
+
     // ============ 私有方法 ============
 
     /**
@@ -314,6 +386,10 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
         LifePost post = new LifePost();
         BeanUtils.copyProperties(dto, post);
         post.setUserId(userId);
+        // title 列 NOT NULL: 前端纯文本流不传标题时置空串, 避免约束异常
+        if (post.getTitle() == null) {
+            post.setTitle("");
+        }
         post.setImages(dto.getImages() == null || dto.getImages().isEmpty()
                 ? null : JSON.toJSONString(dto.getImages()));
         return post;
@@ -373,5 +449,19 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
 
     private boolean isBlank(String s) {
         return s == null || s.isBlank();
+    }
+
+    /**
+     * 图片JSON数组字符串转列表, 解析异常时降级为空列表不影响展示
+     */
+    private List<String> parseImages(String images) {
+        if (isBlank(images)) {
+            return List.of();
+        }
+        try {
+            return JSON.parseArray(images, String.class);
+        } catch (Exception e) {
+            return List.of();
+        }
     }
 }

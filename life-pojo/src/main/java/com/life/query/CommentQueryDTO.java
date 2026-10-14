@@ -14,4 +14,6 @@ public class CommentQueryDTO extends QueryDTO {
      * 帖子ID, 必填
      */
     private Long postId;
+
+    private Long parentId;
 }

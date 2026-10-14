@@ -28,7 +28,7 @@
 
     <select id="selectByLoginAccount" resultType="com.life.entity.LifeUser">
         select
-            id,username,phone,nickname,create_time,avatar,email,user_type,points,
+            id,username,phone,nickname,create_time,avatar,email,user_type,points,password,
             update_time,level,status,last_login_time,last_login_ip,creater,login_count,updater,deleted
         from life_social.life_user
         where deleted = 0

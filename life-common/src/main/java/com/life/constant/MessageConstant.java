@@ -41,4 +41,13 @@ public class MessageConstant {
     public static final String USER_POINTS_NOT_ENOUGH = "当前用户积分不足，无法兑换";
     public static final String BENEFIT_VALID_CONFIG_ERROR = "权益有效期配置异常,请联系客服";
     public static final String BENEFIT_ALREADY_EXPIRED = "该权益已超过兑换有效期";
+
+    // ==================== 商品模块 ====================
+    public static final String PRODUCT_ID_REQUIRED = "商品ID不能为空";
+    public static final String PRODUCT_NOT_FOUND = "商品不存在或已下架";
+    public static final String PRODUCT_NAME_REQUIRED = "商品名称不能为空";
+    public static final String PRODUCT_ON_SALE = "上架中的商品不能删除,请先下架";
+    public static final String PRODUCT_PRICE_CHANNEL_REQUIRED = "商品至少开通一条购买通道(现金或积分)";
+    public static final String PRODUCT_CATEGORY_ID_REQUIRED = "商品分类ID不能为空";
+    public static final String CATEGORY_BE_RELATED_PRODUCT = "当前分类下存在子分类或已挂载商品,不能删除";
 }

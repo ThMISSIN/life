@@ -40,11 +40,6 @@ public class CommentVO {
     private Long replyUserId;
 
     /**
-     * 被回复用户昵称, 渲染"回复 @xxx"
-     */
-    private String replyNickname;
-
-    /**
      * 评论内容
      */
     private String content;

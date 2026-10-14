@@ -1,6 +1,8 @@
 package com.life.controller;
 
 import com.life.dto.PostPublishDTO;
+import com.life.query.PostQueryDTO;
+import com.life.result.PageResult;
 import com.life.result.Result;
 import com.life.service.PostService;
 import com.life.vo.PostVO;
@@ -18,6 +20,14 @@ public class PostController {
 
     @Autowired
     private PostService postService;
+
+    /**
+     * 帖子分页列表: 信息流(type 1-推荐 2-关注) / 指定用户动态(userId) / 关键词(keyword)
+     */
+    @GetMapping("/page")
+    public Result<PageResult> page(PostQueryDTO query) {
+        return Result.success(postService.pageQuery(query));
+    }
 
     /**
      * 发布帖子, 返回完整PostVO供前端插入信息流; 成功后自动清理草稿

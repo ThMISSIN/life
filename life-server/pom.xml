@@ -36,19 +36,9 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-cache</artifactId>
         </dependency>
-<!--        pagehelper-->
-        <dependency>
-            <groupId>com.github.pagehelper</groupId>
-            <artifactId>pagehelper-spring-boot-starter</artifactId>
-            <version>4.1.1</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.mybatis.spring.boot</groupId>
-                    <artifactId>mybatis-spring-boot-starter</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-
+<!--        pagehelper 已移除: 分页统一走MP PaginationInnerInterceptor;
+            且其 starter 的 @AutoConfiguration(after=MybatisAutoConfiguration.class)
+            在排除 mybatis-spring-boot-starter 后启动即抛 ClassNotFoundException-->
     </dependencies>
 
     <build>
