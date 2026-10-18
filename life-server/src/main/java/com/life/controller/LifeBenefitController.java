@@ -5,7 +5,6 @@ import com.life.result.PageResult;
 import com.life.result.Result;
 import com.life.service.LifeBenefitService;
 import com.life.vo.BenefitDetailVO;
-import com.life.vo.BenefitExchangeVO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -36,11 +35,4 @@ public class LifeBenefitController {
         PageResult pageResult = lifeBenefitService.pageList(query);
         return Result.success(pageResult);
     }
-
-    @PostMapping("/{id}/exchange")
-    public Result<BenefitExchangeVO> exchange(@PathVariable Long id) {
-        BenefitExchangeVO vo = lifeBenefitService.exchangeBenefit(id);
-        return Result.success(vo);
-    }
-
 }

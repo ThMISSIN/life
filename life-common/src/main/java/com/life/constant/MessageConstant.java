@@ -39,12 +39,15 @@ public class MessageConstant {
     public static final String BENEFIT_STOCK_NOT_ENOUGH = "权益库存不足";
     public static final String USER_EXCHANGED_COUNT_REACH_LIMIT = "当前用户已领权益数量已超限，无法继续领取";
     public static final String USER_POINTS_NOT_ENOUGH = "当前用户积分不足，无法兑换";
+    public static final String USER_MONEY_NOT_ENOUGH = "余额不足, 请先充值";
     public static final String BENEFIT_VALID_CONFIG_ERROR = "权益有效期配置异常,请联系客服";
     public static final String BENEFIT_ALREADY_EXPIRED = "该权益已超过兑换有效期";
 
     // ==================== 商品模块 ====================
     public static final String PRODUCT_ID_REQUIRED = "商品ID不能为空";
     public static final String PRODUCT_NOT_FOUND = "商品不存在或已下架";
+    public static final String PRODUCT_STOCK_NOT_ENOUGH = "商品库存不足";
+    public static final String PRODUCT_PURCHASE_LIMIT_REACHED = "商品购买数量已达上限";
     public static final String PRODUCT_NAME_REQUIRED = "商品名称不能为空";
     public static final String PRODUCT_ON_SALE = "上架中的商品不能删除,请先下架";
     public static final String PRODUCT_PRICE_CHANNEL_REQUIRED = "商品至少开通一条购买通道(现金或积分)";

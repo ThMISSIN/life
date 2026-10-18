@@ -85,7 +85,7 @@ public class CommentServiceImpl extends ServiceImpl<LifeCommentMapper, LifeComme
         List<LifeComment> childComments = this.list(new LambdaQueryWrapper<LifeComment>()
                 .in(LifeComment::getParentId, parentIds)
                 .orderByDesc(LifeComment::getCreateTime));
-        // 按父评论分组
+        // 按父评论分组 parentId + ChildrenCommnet
         Map<Long, List<LifeComment>> childMap = childComments.stream()
                 .collect(Collectors.groupingBy(LifeComment::getParentId));
 

@@ -1,4 +1,4 @@
-package com.life.controller;
+package com.life.controller.admin;
 
 import com.life.entity.LifeProductCategory;
 import com.life.result.Result;

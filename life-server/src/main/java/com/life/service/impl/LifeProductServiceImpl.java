@@ -6,12 +6,15 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.life.constant.MessageConstant;
 import com.life.constant.ProductConstant;
 import com.life.entity.LifeProduct;
+import com.life.entity.LifeUser;
 import com.life.exception.ValidationException;
+import com.life.mapper.LifeOrderDetailMapper;
 import com.life.mapper.LifeProductMapper;
 import com.life.query.ProductQueryDTO;
 import com.life.result.PageResult;
 import com.life.service.LifeProductService;
 import com.life.vo.ProductDetailVO;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -20,6 +23,9 @@ import java.util.List;
 
 @Service
 public class LifeProductServiceImpl extends ServiceImpl<LifeProductMapper, LifeProduct> implements LifeProductService {
+
+    @Autowired
+    private LifeOrderDetailMapper orderDetailMapper;
 
     @Override
     public PageResult pageList(ProductQueryDTO query) {
@@ -140,6 +146,30 @@ public class LifeProductServiceImpl extends ServiceImpl<LifeProductMapper, LifeP
         update.setId(id);
         update.setStatus(status);
         updateById(update);
+    }
+
+    /**
+     * 下单前置校验: 存在/上架/库存(-1为不限量)/等级/限购, 等级与限购口径与权益通道一致
+     * todo 已知限制: 限购是查数判断, 并发双击可超限, 后续与限兑统一用Redis锁解决
+     */
+    @Override
+    public LifeProduct validatePurchase(Long id, int quantity, LifeUser user) {
+        LifeProduct product = getById(id);
+        if (product == null || product.getStatus() == null || product.getStatus() != ProductConstant.LISTED) {
+            throw new ValidationException(MessageConstant.PRODUCT_NOT_FOUND);
+        }
+        if (product.getStock() != null && product.getStock() != -1 && product.getStock() < quantity) {
+            throw new ValidationException(MessageConstant.PRODUCT_STOCK_NOT_ENOUGH);
+        }
+        if (product.getMinLevel() != null && product.getMinLevel() > 0 && user.getLevel() < product.getMinLevel()) {
+            throw new ValidationException(MessageConstant.USER_LEVEL_NOT_ENOUGH);
+        }
+        // 限购: 已购数量(排除已取消/已退款) + 本单数量 不得超过上限
+        if (product.getPerUserLimit() != null && product.getPerUserLimit() > 0
+                && orderDetailMapper.countPurchased(user.getId(), id) + quantity > product.getPerUserLimit()) {
+            throw new ValidationException(MessageConstant.PRODUCT_PURCHASE_LIMIT_REACHED);
+        }
+        return product;
     }
 
     /**

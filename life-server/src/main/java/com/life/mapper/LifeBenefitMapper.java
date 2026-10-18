@@ -13,6 +13,9 @@ import org.apache.ibatis.annotations.Update;
 public interface LifeBenefitMapper extends BaseMapper<LifeBenefit> {
     Page<LifeBenefit> queryList(Page<LifeBenefit> page, @Param("query") BenefitQueryDTO query);
 
-    @Update("update life_social.life_benefit set stock = stock - 1 where id = #{id} and stock > 0 and sales = sales + 1")
-    int deductStock(Long id);
+    @Update("update life_social.life_benefit set stock = stock - #{quantity}, sales = sales + #{quantity} where id = #{id} and stock >= #{quantity}")
+    int deductStock(Long id, Integer quantity);
+
+    @Update("update life_social.life_benefit set stock = stock + #{quantity}, sales = greatest(sales - #{quantity}, 0) where id = #{id}")
+    int backStock(Long id, Integer quantity);
 }

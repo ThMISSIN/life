@@ -1,6 +1,7 @@
 package com.life.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.life.constant.BalanceTypeConstant;
 import com.life.constant.JwtClaimsConstant;
 import com.life.constant.PasswordConstant;
 import com.life.constant.RedisKeyConstant;
@@ -8,8 +9,10 @@ import com.life.constant.RegexConstant;
 import com.life.constant.StatusConstant;
 import com.life.context.BaseContext;
 import com.life.dto.LoginDTO;
+import com.life.dto.RechargeDTO;
 import com.life.dto.RegisterDTO;
 import com.life.dto.UserUpdateDTO;
+import com.life.entity.LifeBalanceRecord;
 import com.life.entity.LifeUser;
 import com.life.exception.AccountLockedException;
 import com.life.exception.AccountNotFoundException;
@@ -18,6 +21,7 @@ import com.life.exception.UserAlreadyExistsException;
 import com.life.exception.UserNotLoginException;
 import com.life.exception.UserInfoNotFoundException;
 import com.life.exception.ValidationException;
+import com.life.mapper.LifeBalanceRecordMapper;
 import com.life.mapper.UserMapper;
 import com.life.properties.JwtProperties;
 import com.life.result.Result;
@@ -31,6 +35,7 @@ import org.mindrot.jbcrypt.BCrypt;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.ObjectUtils;
 import org.springframework.util.StringUtils;
 
@@ -50,6 +55,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, LifeUser> implement
     private StringRedisTemplate stringRedisTemplate;
     @Autowired
     private com.life.mapper.LifeFollowMapper lifeFollowMapper;
+    @Autowired
+    private LifeBalanceRecordMapper balanceRecordMapper;
 
     @Override
     public LoginVO login(LoginDTO userLoginDTO, HttpServletRequest request) {
@@ -295,5 +302,26 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, LifeUser> implement
         user.setEmail(userUpdateDTO.getEmail());
         this.updateById(user);
         return Result.success("修改成功");
+    }
+
+    /**
+     * 模拟充值: 直接加余额+流水(type=1)
+     * 单笔上限防前端填错/滥用; 正式接入渠道后入账应由支付回调驱动而非本接口
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void recharge(RechargeDTO rechargeDTO) {
+        Integer amount = rechargeDTO.getAmount();
+        if (amount == null || amount <= 0 || amount > 5_000_000) {
+            throw new ValidationException("充值金额需在0.01~50000元之间");
+        }
+        Long userId = BaseContext.getCurrentId();
+        userMapper.addMoney(userId, amount);
+        balanceRecordMapper.insert(LifeBalanceRecord.builder()
+                .userId(userId)
+                .amount(amount)
+                .type(BalanceTypeConstant.RECHARGE)
+                .remark("模拟充值")
+                .build());
     }
 }

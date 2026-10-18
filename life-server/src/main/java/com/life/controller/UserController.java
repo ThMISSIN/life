@@ -1,6 +1,7 @@
 package com.life.controller;
 
 import com.life.dto.LoginDTO;
+import com.life.dto.RechargeDTO;
 import com.life.dto.RegisterDTO;
 import com.life.dto.UserUpdateDTO;
 import com.life.entity.LifeUser;
@@ -92,5 +93,16 @@ public class UserController {
     @PutMapping("/update")
     public Result updateUser(@RequestBody UserUpdateDTO userUpdateDTO) {
         return userService.updateUser(userUpdateDTO);
+    }
+
+    /**
+     * 模拟充值(登录后直接入账, 无支付渠道回调)
+     * @param rechargeDTO amount: 充值金额(分)
+     * @return
+     */
+    @PostMapping("/recharge")
+    public Result recharge(@RequestBody RechargeDTO rechargeDTO) {
+        userService.recharge(rechargeDTO);
+        return Result.success();
     }
 }

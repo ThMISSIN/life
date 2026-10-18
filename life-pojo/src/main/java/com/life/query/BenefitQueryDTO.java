@@ -11,6 +11,11 @@ import lombok.EqualsAndHashCode;
 public class BenefitQueryDTO extends QueryDTO {
 
     /**
+     * 权益状态: 0-下架, 1-上架; 管理端不传查全部, C端由服务层强制为1
+     */
+    private Integer status;
+
+    /**
      * 分类ID, 传一级分类ID时只返回挂在该分类下的权益
      */
     private Long categoryId;

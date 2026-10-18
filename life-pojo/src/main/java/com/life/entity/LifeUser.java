@@ -21,6 +21,8 @@ public class LifeUser extends BaseEntity{
     private String email;
     private Integer userType;
     private Integer points;
+    /** 余额(分) */
+    private Integer money;
     private Integer level;
     private Integer status;
     private LocalDateTime lastLoginTime;

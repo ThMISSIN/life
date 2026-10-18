@@ -22,4 +22,7 @@ public class PointsTypeConstant {
 
     /** 积分兑换 */
     public static final int EXCHANGE = 6;
+
+    /** 兑换作废退回 */
+    public static final int REFUND = 7;
 }

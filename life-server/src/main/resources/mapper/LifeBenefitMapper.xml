@@ -7,7 +7,10 @@
         select *
         from life_benefit
         where deleted = 0
-          and status = 1
+        <!-- C端由服务层强制status=1, 管理端不传查全部(含下架) -->
+        <if test="query.status != null">
+            and status = #{query.status}
+        </if>
         <if test="query.categoryId != null">
             and category_id = #{query.categoryId}
         </if>

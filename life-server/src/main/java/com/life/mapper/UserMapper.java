@@ -32,4 +32,13 @@ public interface UserMapper extends BaseMapper<LifeUser> {
 
     @Update("update life_social.life_user set points = points - #{pointsPrice} where id = #{userId} and points >= #{pointsPrice}")
     int deductPoints(Long userId, Integer pointsPrice);
+
+    @Update("update life_social.life_user set points = points + #{points} where id = #{userId}")
+    int addPoints(Long userId, Integer points);
+
+    @Update("update life_social.life_user set money = money - #{payAmount} where id = #{userId} and money >= #{payAmount}")
+    int deductMoney(Long userId, Integer payAmount);
+
+    @Update("update life_social.life_user set money = money + #{amount} where id = #{userId}")
+    int addMoney(Long userId, Integer amount);
 }

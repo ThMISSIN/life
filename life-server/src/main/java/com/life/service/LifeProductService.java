@@ -2,6 +2,7 @@ package com.life.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.life.entity.LifeProduct;
+import com.life.entity.LifeUser;
 import com.life.query.ProductQueryDTO;
 import com.life.result.PageResult;
 import com.life.vo.ProductDetailVO;
@@ -42,4 +43,9 @@ public interface LifeProductService extends IService<LifeProduct> {
      * 管理端上下架
      */
     void updateStatus(Long id, Integer status);
+
+    /**
+     * 下单前置校验(存在/上架/库存/等级/限购), 供提交订单接口复用
+     */
+    LifeProduct validatePurchase(Long id, int quantity, LifeUser user);
 }

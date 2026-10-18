@@ -50,6 +50,11 @@ public class UserVO {
     private Integer points;
 
     /**
+     * 余额(分)
+     */
+    private Integer money;
+
+    /**
      * 会员等级:1‑普通会员,2‑银卡,3‑金卡,4‑钻石
      */
     private Integer level;

@@ -2,6 +2,7 @@ package com.life.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.life.dto.LoginDTO;
+import com.life.dto.RechargeDTO;
 import com.life.dto.RegisterDTO;
 import com.life.dto.UserUpdateDTO;
 import com.life.entity.LifeUser;
@@ -25,4 +26,7 @@ public interface UserService extends IService<LifeUser> {
     UserVO getUserDetail(Long userId);
 
     Result updateUser(UserUpdateDTO userUpdateDTO);
+
+    // 模拟充值: 直接入账+余额流水(正式渠道接入后改为支付回调驱动)
+    void recharge(RechargeDTO rechargeDTO);
 }
