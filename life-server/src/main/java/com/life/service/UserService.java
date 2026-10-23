@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.life.dto.LoginDTO;
 import com.life.dto.RechargeDTO;
 import com.life.dto.RegisterDTO;
+import com.life.dto.UpdatePasswordDTO;
 import com.life.dto.UserUpdateDTO;
 import com.life.entity.LifeUser;
 import com.life.result.Result;
@@ -29,4 +30,7 @@ public interface UserService extends IService<LifeUser> {
 
     // 模拟充值: 直接入账+余额流水(正式渠道接入后改为支付回调驱动)
     void recharge(RechargeDTO rechargeDTO);
+
+    // 修改密码: 登录态凭原密码校验通过后更新(区别于免登录的忘记密码)
+    void changePassword(UpdatePasswordDTO updatePasswordDTO);
 }

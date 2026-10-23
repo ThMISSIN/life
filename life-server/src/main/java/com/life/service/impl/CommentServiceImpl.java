@@ -8,8 +8,11 @@ import com.life.context.BaseContext;
 import com.life.dto.CommentPublishDTO;
 import com.life.dto.PageDTO;
 import com.life.entity.LifeComment;
+import com.life.entity.LifePost;
 import com.life.entity.LifeUser;
+import com.life.exception.ValidationException;
 import com.life.mapper.LifeCommentMapper;
+import com.life.mapper.LifePostMapper;
 import com.life.query.CommentQueryDTO;
 import com.life.service.CommentService;
 
@@ -19,6 +22,7 @@ import com.life.vo.AuthorVO;
 import com.life.vo.CommentVO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,6 +34,8 @@ public class CommentServiceImpl extends ServiceImpl<LifeCommentMapper, LifeComme
 
     @Autowired
     private UserService userService;
+    @Autowired
+    private LifePostMapper postMapper;
 
     @Override
     public void addComment(CommentPublishDTO replyDTO) {
@@ -108,6 +114,29 @@ public class CommentServiceImpl extends ServiceImpl<LifeCommentMapper, LifeComme
         }
 
         return new PageDTO<>(page.getTotal(), page.getPages(), voList);
+    }
+
+    /**
+     * 删除评论: 评论本人可删自己的; 帖子作者可删自己帖子下的任意评论(含他人)
+     * 走MP逻辑删, 查询自动过滤; 顶级评论连带删子评论, 避免孤儿子评论脱离树
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteComment(Long id) {
+        Long userId = BaseContext.getCurrentId();
+        LifeComment comment = getById(id);
+        if (comment == null) {
+            throw new ValidationException("评论不存在");
+        }
+        if (!comment.getUserId().equals(userId)) {
+            // 非评论本人: 仅帖子作者有管理权
+            LifePost post = postMapper.selectById(comment.getPostId());
+            if (post == null || !post.getUserId().equals(userId)) {
+                throw new ValidationException("无权删除该评论");
+            }
+        }
+        removeById(id);
+        remove(new LambdaQueryWrapper<LifeComment>().eq(LifeComment::getParentId, id));
     }
 
     private AuthorVO buildAuthor(Long userId) {

@@ -6,7 +6,9 @@ import com.life.query.CommentQueryDTO;
 import com.life.service.CommentService;
 import com.life.vo.CommentVO;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -30,6 +32,12 @@ public class CommentController {
     @GetMapping("/page")
     public PageDTO<CommentVO> queryReplyPage(CommentQueryDTO query) {
         return commentService.queryCommentPage(query);
+    }
+
+    // 删除评论(本人或帖子作者)
+    @DeleteMapping("/{id}")
+    public void deleteReply(@PathVariable Long id) {
+        commentService.deleteComment(id);
     }
 
 }

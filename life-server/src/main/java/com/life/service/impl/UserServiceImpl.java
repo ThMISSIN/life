@@ -11,6 +11,7 @@ import com.life.context.BaseContext;
 import com.life.dto.LoginDTO;
 import com.life.dto.RechargeDTO;
 import com.life.dto.RegisterDTO;
+import com.life.dto.UpdatePasswordDTO;
 import com.life.dto.UserUpdateDTO;
 import com.life.entity.LifeBalanceRecord;
 import com.life.entity.LifeUser;
@@ -323,5 +324,33 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, LifeUser> implement
                 .type(BalanceTypeConstant.RECHARGE)
                 .remark("模拟充值")
                 .build());
+    }
+
+    /**
+     * 修改密码: 登录态下凭原密码修改; 校验链 参数非空->原密码正确->新旧不同
+     * 只更新password列(updateById部分更新), 避免整行覆盖
+     */
+    @Override
+    public void changePassword(UpdatePasswordDTO updatePasswordDTO) {
+        if (!StringUtils.hasText(updatePasswordDTO.getOldPassword())
+                || !StringUtils.hasText(updatePasswordDTO.getNewPassword())) {
+            throw new ValidationException("原密码和新密码不能为空");
+        }
+        if (updatePasswordDTO.getOldPassword().equals(updatePasswordDTO.getNewPassword())) {
+            throw new ValidationException("新密码不能与原密码相同");
+        }
+        Long userId = BaseContext.getCurrentId();
+        LifeUser user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new ValidationException("用户不存在");
+        }
+        if (!BCrypt.checkpw(updatePasswordDTO.getOldPassword(), user.getPassword())) {
+            throw new PasswordErrorException("原密码错误");
+        }
+
+        LifeUser update = new LifeUser();
+        update.setId(userId);
+        update.setPassword(BCrypt.hashpw(updatePasswordDTO.getNewPassword(), BCrypt.gensalt(PasswordConstant.HASH_COST)));
+        userMapper.updateById(update);
     }
 }

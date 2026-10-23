@@ -3,6 +3,7 @@ package com.life.controller;
 import com.life.dto.LoginDTO;
 import com.life.dto.RechargeDTO;
 import com.life.dto.RegisterDTO;
+import com.life.dto.UpdatePasswordDTO;
 import com.life.dto.UserUpdateDTO;
 import com.life.entity.LifeUser;
 import com.life.mapper.UserMapper;
@@ -104,5 +105,16 @@ public class UserController {
     public Result recharge(@RequestBody RechargeDTO rechargeDTO) {
         userService.recharge(rechargeDTO);
         return Result.success();
+    }
+
+    /**
+     * 修改密码(登录态凭原密码, 区别于免登录的忘记密码)
+     * @param updatePasswordDTO
+     * @return
+     */
+    @PutMapping("/update/password")
+    public Result updatePassword(@RequestBody UpdatePasswordDTO updatePasswordDTO) {
+        userService.changePassword(updatePasswordDTO);
+        return Result.success("修改密码成功");
     }
 }
