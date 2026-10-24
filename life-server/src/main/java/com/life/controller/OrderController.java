@@ -61,4 +61,13 @@ public class OrderController {
         orderService.payOrder(id);
         return Result.success();
     }
+
+    /**
+     * 确认收货(仅本人、仅已发货)
+     */
+    @PutMapping("/{id}/confirm")
+    public Result confirm(@PathVariable Long id) {
+        orderService.confirmOrder(id);
+        return Result.success();
+    }
 }

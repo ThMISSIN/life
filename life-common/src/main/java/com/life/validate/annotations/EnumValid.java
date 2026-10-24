@@ -1,7 +1,6 @@
 package com.life.validate.annotations;
 
 
-import com.life.validate.EnumValidator;
 import com.life.validate.EnumValueValidator;
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
@@ -14,7 +13,7 @@ import java.lang.annotation.*;
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ ElementType.PARAMETER, ElementType.FIELD, ElementType.METHOD })
-@Constraint(validatedBy = {EnumValidator.class, EnumValueValidator.class})
+@Constraint(validatedBy = {EnumValueValidator.class})
 public @interface EnumValid {
     String message() default "不满足业务条件";
 

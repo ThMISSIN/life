@@ -45,5 +45,9 @@ public interface OrderService extends IService<LifeOrder> {
      */
     void deliverOrder(Long id);
 
+    /**
+     * 确认收货(仅本人、仅已发货, 状态 2→3, 商品单状态机最后一环)
+     */
+    void confirmOrder(Long id);
 
 }

@@ -16,4 +16,7 @@ public class BenefitConstant {
 
     /** 有效期类型: 固定截止日期 */
     public static final int VALID_FIXED = 2;
+
+    // 是否有库存: 0-无货; -1-无限
+    public static final int NO_STOCK = 0;
 }

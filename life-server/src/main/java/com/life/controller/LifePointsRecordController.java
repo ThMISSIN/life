@@ -1,14 +1,22 @@
 package com.life.controller;
 
-
-import com.life.entity.LifePointsRecord;
 import com.life.query.QueryDTO;
 import com.life.result.PageResult;
 import com.life.result.Result;
 import com.life.service.LifePointsRecordService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * C端积分流水接口(需登录, /points/** 已注册拦截器)
+ *
+ * 流水表是 append-only 的对账事实源: 只应由签到/兑换/退款等业务动作作为副作用写入
+ * (统一入口见 roadmap 2.2 changePoints 重构), 不提供任何直接增/删/改端点——
+ * 原通用 CRUD 脚手架属伪造/越权篡改账本的后门, 已于 2026-10-24 移除。
+ * 管理端全量视角走 /admin/points/record/page (AdminPointsRecordController)。
+ */
 @RestController
 @RequestMapping("/points/record")
 public class LifePointsRecordController {
@@ -17,43 +25,7 @@ public class LifePointsRecordController {
     private LifePointsRecordService lifePointsRecordService;
 
     /**
-     * 新增积分记录
-     */
-    @PostMapping
-    public Result add(@RequestBody LifePointsRecord lifePointsRecord) {
-        lifePointsRecordService.save(lifePointsRecord);
-        return Result.success();
-    }
-
-    /**
-     * 删除积分记录
-     */
-    @DeleteMapping("/{id}")
-    public Result delete(@PathVariable Long id) {
-        lifePointsRecordService.removeById(id);
-        return Result.success();
-    }
-
-    /**
-     * 修改积分记录
-     */
-    @PutMapping
-    public Result update(@RequestBody LifePointsRecord lifePointsRecord) {
-        lifePointsRecordService.updateById(lifePointsRecord);
-        return Result.success();
-    }
-
-    /**
-     * 根据ID查询积分记录
-     */
-    @GetMapping("/{id}")
-    public Result<LifePointsRecord> getById(@PathVariable Long id) {
-        LifePointsRecord lifePointsRecord = lifePointsRecordService.getById(id);
-        return Result.success(lifePointsRecord);
-    }
-
-    /**
-     * 分页查询积分记录
+     * 分页查询当前用户积分流水(服务层从登录态取 userId, 仅本人视角; 前端积分明细在用)
      */
     @GetMapping("/page")
     public Result<PageResult> page(QueryDTO queryDTO) {

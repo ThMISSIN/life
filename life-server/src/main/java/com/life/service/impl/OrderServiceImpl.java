@@ -58,6 +58,8 @@ public class OrderServiceImpl extends ServiceImpl<LifeOrderMapper, LifeOrder> im
     private LifeProductService productService;
     @Autowired
     private LifeBenefitService benefitService;
+    @Autowired
+    private LifeCartMapper cartMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -200,7 +202,15 @@ public class OrderServiceImpl extends ServiceImpl<LifeOrderMapper, LifeOrder> im
                 benefitService.grantExchange(benefit, benefitQtyMap.get(benefit.getId()), userId, orderNo);
             }
         }
-        // 6、组装VO返回
+        // 6、购物车来源单: 同事务清理已下单的购物车行(直购路径不传 cartIds, 跳过)
+        //    userId 归属条件兜底: 混入他人/不存在的 id 只是静默不命中, 不报错也无探测泄露;
+        //    清理与下单同在本事务, 下单失败整体回滚、购物车行保留可直接重试, 成功则必清、不残留已购商品
+        if (submitDTO.getCartIds() != null && !submitDTO.getCartIds().isEmpty()) {
+            cartMapper.delete(new LambdaQueryWrapper<LifeCart>()
+                    .in(LifeCart::getId, submitDTO.getCartIds())
+                    .eq(LifeCart::getUserId, userId));
+        }
+        // 7、组装VO返回
         OrderVO orderVO = BeanUtils.copyBean(order, OrderVO.class);
         orderVO.setDetails(BeanUtils.copyList(details, OrderDetailVO.class));
         return orderVO;
@@ -367,6 +377,23 @@ public class OrderServiceImpl extends ServiceImpl<LifeOrderMapper, LifeOrder> im
         baseMapper.updateById(order);
     }
 
+    @Override
+    public void confirmOrder(Long id) {
+        Long userId = BaseContext.getCurrentId();
+        LifeOrder order = getById(id);
+        // 不存在/非本人统一报不存在
+        if (order == null || !order.getUserId().equals(userId)) {
+            throw new ValidationException("订单不存在");
+        }
+        // 仅已发货可确认收货: 状态 2→3, 补齐商品单状态机最后一个断点
+        // (权益单提交即置1, 永远到不了2, 天然被此校验拦截, 不会误确认)
+        if (order.getStatus() != 2) {
+            throw new ValidationException("订单未发货, 不可确认收货");
+        }
+        order.setStatus(3);
+        updateById(order);
+        // TODO 可加超时自动确认: 定时任务扫 status=2 且发货超N天 自动置3(依赖 deliver 时间字段, 现表暂以 update_time 近似)
+    }
 
     private String generateOrderNumber() {
         String code = "LP";

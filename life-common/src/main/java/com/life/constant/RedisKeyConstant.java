@@ -45,4 +45,11 @@ public class RedisKeyConstant {
      */
     public static final String LIKES_TIMES = "likes:times:type:{bizType}";
 
+    public static final String CART_ADD_LOCK = "cart:lock:add:{userId}:{itemType}:{itemId}";
+
+    public static final int CART_ADD_LOCK_TTL_SECONDS = 5;
+
+    public static final int ROW_MAX_QUANTITY = 999;
+
+
 }
