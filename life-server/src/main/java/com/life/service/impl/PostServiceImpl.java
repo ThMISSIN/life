@@ -20,20 +20,25 @@ import com.life.mapper.LifePostMapper;
 import com.life.query.PostQueryDTO;
 import com.life.result.PageResult;
 import com.life.result.Result;
+import com.life.service.FavoriteService;
 import com.life.service.LikeService;
 import com.life.service.PostService;
 import com.life.service.UserService;
 import com.life.vo.AuthorVO;
 import com.life.vo.PostVO;
+import com.life.vo.RepostSourceVO;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -48,6 +53,8 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
     private StringRedisTemplate redisTemplate;
     @Autowired
     private LikeService likeService;
+    @Autowired
+    private FavoriteService favoriteService;
     @Autowired
     private LifeFollowMapper lifeFollowMapper;
 
@@ -226,6 +233,7 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
         post.setCommentCount(0);
 
         // 4. 落库
+        post.setRepostCount(0);
         if (!save(post)) {
             throw new BaseException("帖子发布失败，请重试");
         }
@@ -253,6 +261,7 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
                 .commentCount(post.getCommentCount())
                 .repostCount(0)
                 .liked(false)
+                .favorited(false)
                 .status(post.getStatus())
                 .createTime(post.getCreateTime())
                 .build();
@@ -312,6 +321,8 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
     @Override
     public void deletePostById(Long postId) {
         Long userId = BaseContext.getCurrentId();
+        // 先读源帖链接(转发帖删除需回冲计数; 归属校验仍在下方单条条件删除内完成, 无越权风险)
+        LifePost post = getById(postId);
         // 归属校验放进DELETE条件, 单条语句原子完成, 消除查后删两步间的竞态(P2优化)
         boolean removed = remove(new LambdaQueryWrapper<LifePost>()
                 .eq(LifePost::getId, postId)
@@ -319,6 +330,77 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
         if (!removed) {
             throw new BaseException("帖子不存在或无权限删除");
         }
+        if (post != null && post.getRepostSourceId() != null) {
+            baseMapper.decRepostCount(post.getRepostSourceId());
+        }
+    }
+
+    /**
+     * 转发帖子(1.5 一期): 生成转发帖 + 源帖计数原子+1, 同事务保证"计数与转发帖必同时存在";
+     * 源帖并发被删时 inc 影响0行 -> 整体回滚, 不产生孤儿转发帖
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public PostVO repost(Long postId, String remark) {
+        Long userId = BaseContext.getCurrentId();
+        LifePost source = getById(postId);
+        if (source == null || source.getStatus() == null
+                || (source.getStatus() != PostStatusConstant.PUBLISHED
+                && source.getStatus() != PostStatusConstant.TOP)) {
+            throw new ValidationException("帖子不存在或不可转发");
+        }
+
+        LifePost repost = new LifePost();
+        repost.setUserId(userId);
+        repost.setTitle("");
+        // 附言可空(纯转发), 与原创帖同口径入库; 转发不带图/分类
+        repost.setContent(remark == null ? "" : remark.trim());
+        repost.setStatus(PostStatusConstant.PUBLISHED);
+        repost.setViewCount(0);
+        repost.setLikeCount(0);
+        repost.setCommentCount(0);
+        repost.setRepostCount(0);
+        repost.setRepostSourceId(postId);
+        save(repost);
+
+        if (baseMapper.incRepostCount(postId) == 0) {
+            throw new BaseException("源帖已被删除, 转发失败");
+        }
+
+        // 组装返回VO: 本人作者信息 + 源帖摘要, 前端直接插入信息流
+        LifeUser me = userService.getById(userId);
+        if (me == null) {
+            throw new UserNotLoginException("用户不存在");
+        }
+        AuthorVO author = AuthorVO.builder()
+                .userId(me.getId())
+                .username(me.getUsername())
+                .nickname(me.getNickname())
+                .avatar(me.getAvatar())
+                .followed(false)
+                .build();
+        Map<Long, LifeUser> sourceUserMap = new HashMap<>();
+        LifeUser sourceAuthor = userService.getById(source.getUserId());
+        if (sourceAuthor != null) {
+            sourceUserMap.put(sourceAuthor.getId(), sourceAuthor);
+        }
+        return PostVO.builder()
+                .id(repost.getId())
+                .author(author)
+                .title(repost.getTitle())
+                .content(repost.getContent())
+                .images(List.of())
+                .viewCount(0)
+                .likeCount(0)
+                .commentCount(0)
+                .repostCount(0)
+                .repostSourceId(postId)
+                .repostSource(buildRepostSource(postId, source, sourceUserMap))
+                .liked(false)
+                .favorited(false)
+                .status(repost.getStatus())
+                .createTime(repost.getCreateTime())
+                .build();
     }
 
     @Override
@@ -347,6 +429,24 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
 
         List<Long> postIds = posts.stream().map(LifePost::getId).toList();
         Set<Long> likedIds = new HashSet<>(likeService.isBizLiked(BizTypeConstant.POST, postIds));
+        // 收藏角标批量状态(DB唯一键前缀 user_id 索引, 直查即可; 口径参照 liked)
+        Set<Long> favoritedIds = new HashSet<>(favoriteService.listFavoritedBizIds(
+                com.life.constant.FavoriteTypeConstant.POST, postIds));
+
+        // 转发源帖批量: 收集源帖ID(去重非空)一次IN查, 作者并入userMap复用同批查询
+        List<Long> sourceIds = posts.stream().map(LifePost::getRepostSourceId)
+                .filter(java.util.Objects::nonNull).distinct().toList();
+        Map<Long, LifePost> sourceMap = new HashMap<>();
+        if (!sourceIds.isEmpty()) {
+            List<LifePost> sources = listByIds(sourceIds);
+            sources.forEach(s -> sourceMap.put(s.getId(), s));
+            // 源帖作者若不在当前页作者集内, 追加一次批量查询
+            List<Long> extraAuthorIds = sources.stream().map(LifePost::getUserId)
+                    .filter(uid -> !userMap.containsKey(uid)).distinct().toList();
+            if (!extraAuthorIds.isEmpty()) {
+                userService.listByIds(extraAuthorIds).forEach(u -> userMap.put(u.getId(), u));
+            }
+        }
 
         List<PostVO> vos = posts.stream().map(p -> {
             LifeUser u = userMap.get(p.getUserId());
@@ -367,8 +467,12 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
                     .viewCount(p.getViewCount())
                     .likeCount(p.getLikeCount())
                     .commentCount(p.getCommentCount())
-                    .repostCount(0)
+                    .repostCount(p.getRepostCount() == null ? 0 : p.getRepostCount())
+                    .repostSourceId(p.getRepostSourceId())
+                    .repostSource(p.getRepostSourceId() == null ? null
+                            : buildRepostSource(p.getRepostSourceId(), sourceMap.get(p.getRepostSourceId()), userMap))
                     .liked(likedIds.contains(p.getId()))
+                    .favorited(favoritedIds.contains(p.getId()))
                     .status(p.getStatus())
                     .createTime(p.getCreateTime())
                     .build();
@@ -463,5 +567,36 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
         } catch (Exception e) {
             return List.of();
         }
+    }
+
+    /**
+     * 组装转发源帖摘要: source=null 表示源帖已被物理/逻辑删除 -> available=false 占位;
+     * 正文超140字符截断, 图片取首图, 作者昵称空以username兜底
+     */
+    private RepostSourceVO buildRepostSource(Long sourceId, LifePost source, Map<Long, LifeUser> userMap) {
+        if (source == null) {
+            return RepostSourceVO.builder()
+                    .id(sourceId)
+                    .authorName("用户已注销")
+                    .content("")
+                    .available(false)
+                    .build();
+        }
+        LifeUser u = userMap.get(source.getUserId());
+        String authorName = u == null ? "用户已注销"
+                : (!isBlank(u.getNickname()) ? u.getNickname() : u.getUsername());
+        String content = source.getContent();
+        if (content != null && content.length() > 140) {
+            content = content.substring(0, 140);
+        }
+        List<String> imgs = parseImages(source.getImages());
+        return RepostSourceVO.builder()
+                .id(sourceId)
+                .authorName(authorName)
+                .content(content)
+                .image(imgs.isEmpty() ? null : imgs.get(0))
+                .createTime(source.getCreateTime())
+                .available(true)
+                .build();
     }
 }

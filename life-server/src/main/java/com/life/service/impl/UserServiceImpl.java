@@ -258,6 +258,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, LifeUser> implement
         userVO.setEmail(user.getEmail());
         userVO.setUserType(user.getUserType());
         userVO.setPoints(user.getPoints());
+        userVO.setMoney(user.getMoney());
         userVO.setLevel(user.getLevel());
         userVO.setStatus(user.getStatus());
         userVO.setLastLoginTime(user.getLastLoginTime());

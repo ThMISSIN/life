@@ -18,6 +18,12 @@ public interface PostService extends IService<LifePost> {
     // 删除帖子(校验归属, 逻辑删除)
     void deletePostById(Long postId);
 
+    /**
+     * 转发帖子(1.5 一期): 生成一条转发帖(repost_source_id 指向源帖) + 源帖 repost_count 原子+1;
+     * 附言可空(空则纯转发), 转发不可带图/改分类; 返回完整PostVO供前端插入信息流
+     */
+    PostVO repost(Long postId, String remark);
+
     // 保存/更新草稿(一人一份: 无草稿则新建, 有则覆盖), 返回草稿VO含id; 空内容视为放弃草稿
     PostVO saveDraft(PostPublishDTO postDTO);
 

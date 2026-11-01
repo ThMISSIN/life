@@ -11,6 +11,9 @@
         <if test="query.status != null">
             and status = #{query.status}
         </if>
+        <if test="query.benefitType != null">
+            and benefit_type = #{query.benefitType}
+        </if>
         <if test="query.categoryId != null">
             and category_id = #{query.categoryId}
         </if>

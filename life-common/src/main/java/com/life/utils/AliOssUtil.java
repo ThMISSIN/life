@@ -23,9 +23,10 @@ public class AliOssUtil {
     /**
      * 文件上传
      *
-     * @param bytes
-     * @param objectName
-     * @return
+     * @param bytes      文件字节
+     * @param objectName OSS 对象名（UUID+后缀）
+     * @return 文件访问 URL（https://{bucket}.{endpoint}/{objectName}）
+     * @throws RuntimeException 上传失败时抛出, 由调用方统一返回业务错误（不静默返回无效 URL）
      */
     public String upload(byte[] bytes, String objectName) {
 
@@ -36,34 +37,21 @@ public class AliOssUtil {
             // 创建PutObject请求。
             ossClient.putObject(bucketName, objectName, new ByteArrayInputStream(bytes));
         } catch (OSSException oe) {
-            System.out.println("Caught an OSSException, which means your request made it to OSS, "
-                    + "but was rejected with an error response for some reason.");
-            System.out.println("Error Message:" + oe.getErrorMessage());
-            System.out.println("Error Code:" + oe.getErrorCode());
-            System.out.println("Request ID:" + oe.getRequestId());
-            System.out.println("Host ID:" + oe.getHostId());
+            log.error("OSS 服务端拒绝请求, ErrorCode: {}, ErrorMessage: {}, RequestId: {}",
+                    oe.getErrorCode(), oe.getErrorMessage(), oe.getRequestId());
+            throw new RuntimeException("文件上传到OSS失败: " + oe.getErrorMessage(), oe);
         } catch (ClientException ce) {
-            System.out.println("Caught an ClientException, which means the client encountered "
-                    + "a serious internal problem while trying to communicate with OSS, "
-                    + "such as not being able to access the network.");
-            System.out.println("Error Message:" + ce.getMessage());
+            log.error("OSS 客户端异常(网络/配置问题): {}", ce.getMessage());
+            throw new RuntimeException("文件上传到OSS失败: " + ce.getMessage(), ce);
         } finally {
-            if (ossClient != null) {
-                ossClient.shutdown();
-            }
+            ossClient.shutdown();
         }
 
         //文件访问路径规则 https://BucketName.Endpoint/ObjectName
-        StringBuilder stringBuilder = new StringBuilder("https://");
-        stringBuilder
-                .append(bucketName)
-                .append(".")
-                .append(endpoint)
-                .append("/")
-                .append(objectName);
+        String url = "https://" + bucketName + "." + endpoint + "/" + objectName;
 
-        log.info("文件上传到:{}", stringBuilder.toString());
+        log.info("文件上传到:{}", url);
 
-        return stringBuilder.toString();
+        return url;
     }
 }

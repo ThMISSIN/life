@@ -60,14 +60,29 @@ public class PostVO {
     private Integer commentCount;
 
     /**
-     * 转发数, 表暂无该列, 一期固定返回0(前端卡片已预留reposts位)
+     * 转发数(life_post.repost_count 实列, 3.4 一期)
      */
     private Integer repostCount;
+
+    /**
+     * 转发源帖子ID(原创帖为null)
+     */
+    private Long repostSourceId;
+
+    /**
+     * 转发源帖摘要(列表组装; 源帖已删时 available=false 占位)
+     */
+    private RepostSourceVO repostSource;
 
     /**
      * 当前登录用户是否已点赞, 未登录时可为null
      */
     private Boolean liked;
+
+    /**
+     * 当前登录用户是否已收藏(信息流批量回填, 参照 liked)
+     */
+    private Boolean favorited;
 
     /**
      * 状态: 0-草稿, 1-已发布, 2-置顶, 3-隐藏, 4-已删除

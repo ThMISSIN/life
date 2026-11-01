@@ -25,4 +25,7 @@ public class PointsTypeConstant {
 
     /** 兑换作废退回 */
     public static final int REFUND = 7;
+
+    /** 榜单奖励(月度积分榜前三名, 由结算任务发放) */
+    public static final int RANK_REWARD = 8;
 }

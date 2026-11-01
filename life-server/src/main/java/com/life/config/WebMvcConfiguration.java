@@ -5,13 +5,16 @@ import com.life.json.JacksonObjectMapper;
 import com.life.properties.JwtProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import java.nio.file.Paths;
 import java.util.List;
 
 /**
@@ -27,6 +30,9 @@ public class WebMvcConfiguration implements WebMvcConfigurer {
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
 
+    @Value("${life.local-storage.base-path:uploads}")
+    private String localStorageBasePath;
+
     /**
      * 注册自定义拦截器：需登录的接口（token校验+登出黑名单校验），
      * 登录、注册、忘记密码为公开接口。
@@ -39,7 +45,7 @@ public class WebMvcConfiguration implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         // 实例1：必登录拦截器，游客或无效令牌401
         registry.addInterceptor(new JwtUserInterceptor(jwtProperties, stringRedisTemplate, true))
-                .addPathPatterns("/user/**", "/benefit/**", "/admin/**", "/signRecord/**", "/points/**", "/post/**", "/follow/**", "/like/**", "/product/**", "/replies/**", "/order/**", "/cart/**")
+                .addPathPatterns("/user/**", "/benefit/**", "/admin/**", "/signRecord/**", "/points/**", "/post/**", "/follow/**", "/like/**", "/product/**", "/replies/**", "/order/**", "/cart/**", "/notice/**", "/favorite/**")
                 .excludePathPatterns(
                         "/user/user/login",
                         "/user/user/register",
@@ -49,6 +55,17 @@ public class WebMvcConfiguration implements WebMvcConfigurer {
         // 实例2：可选登录拦截器，带有效令牌则解析用户身份，否则按匿名放行
         registry.addInterceptor(new JwtUserInterceptor(jwtProperties, stringRedisTemplate, false))
                 .addPathPatterns("/replies/page");
+    }
+
+    /**
+     * 本地存储静态映射: /uploads/** -> {base-path} 目录
+     * （life.storage.type=local 时上传文件的对外访问通道）
+     */
+    @Override
+    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        String absolute = Paths.get(localStorageBasePath).toAbsolutePath().toString().replace("\\", "/");
+        registry.addResourceHandler("/uploads/**")
+                .addResourceLocations("file:" + absolute + "/");
     }
 
     /**

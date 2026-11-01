@@ -51,5 +51,11 @@ public class RedisKeyConstant {
 
     public static final int ROW_MAX_QUANTITY = 999;
 
+    /**
+     * 通知事件 Redis Pub/Sub 频道: life-admin(发布方) -> life-social(订阅方, NoticeEventListener)
+     * 一期公告fan-out通道, 二期业务事件通知迁 RabbitMQ 后本通道收敛为仅实时推送触发
+     */
+    public static final String NOTICE_PUSH_CHANNEL = "life:notice:push";
+
 
 }

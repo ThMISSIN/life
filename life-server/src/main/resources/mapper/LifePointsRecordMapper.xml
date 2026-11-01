@@ -15,4 +15,50 @@
         </if>
         ORDER BY create_time DESC
     </select>
+
+    <!-- 积分榜单聚合(半闭区间 [start, end)): 区间内正数流水按用户求和倒序取前 limit 条;
+         口径: 只计发放(排除消费负数), 无流水用户不上榜; nickname 空以 username 兜底;
+         注解SQL同款约束: deleted=0 手写; rank 由服务层按 offset+行序 回填 -->
+    <select id="selectMonthRankBoard" resultType="com.life.vo.PointsRankVO">
+        select t.user_id                                                    as userId,
+               coalesce(nullif(u.nickname, ''), u.username)                 as nickname,
+               u.username                                                   as username,
+               u.avatar                                                     as avatar,
+               t.pts                                                        as points
+        from (select user_id, sum(points) as pts
+              from life_points_record
+              where deleted = 0
+                and points &gt; 0
+                and create_time &gt;= #{start}
+                and create_time &lt; #{end}
+              group by user_id
+              order by pts desc, user_id asc
+              limit #{offset}, #{limit}) t
+                 join life_user u on u.id = t.user_id and u.deleted = 0
+    </select>
+
+    <!-- 我的名次: 同期正数流水和严格大于我的人数 + 1(并列同名次);
+         我无正数流水时返回 0(未上榜), 展示口径由服务层决定 -->
+    <select id="selectMyMonthRank" resultType="java.lang.Integer">
+        select case
+                   when coalesce(my.p, 0) &lt;= 0 then 0
+                   else (select count(*) + 1
+                         from (select user_id, sum(points) as p
+                               from life_points_record
+                               where deleted = 0
+                                 and points &gt; 0
+                                 and create_time &gt;= #{start}
+                                 and create_time &lt; #{end}
+                               group by user_id) board
+                         where board.p &gt; my.p)
+                   end
+        from (select coalesce(sum(points), 0) as p
+              from life_points_record
+              where deleted = 0
+                and points &gt; 0
+                and user_id = #{userId}
+                and create_time &gt;= #{start}
+                and create_time &lt; #{end}) my
+    </select>
+
 </mapper>

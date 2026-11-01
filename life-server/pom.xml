@@ -36,9 +36,19 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-cache</artifactId>
         </dependency>
-<!--        pagehelper 已移除: 分页统一走MP PaginationInnerInterceptor;
-            且其 starter 的 @AutoConfiguration(after=MybatisAutoConfiguration.class)
-            在排除 mybatis-spring-boot-starter 后启动即抛 ClassNotFoundException-->
+        <!-- SpringBoot WebSocket starter -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
+        <!-- Spring AMQP RabbitMQ starter -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+        <!--        pagehelper 已移除: 分页统一走MP PaginationInnerInterceptor;
+                    且其 starter 的 @AutoConfiguration(after=MybatisAutoConfiguration.class)
+                    在排除 mybatis-spring-boot-starter 后启动即抛 ClassNotFoundException-->
     </dependencies>
 
     <build>

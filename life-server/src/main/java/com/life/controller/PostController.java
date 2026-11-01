@@ -1,6 +1,7 @@
 package com.life.controller;
 
 import com.life.dto.PostPublishDTO;
+import com.life.dto.RepostDTO;
 import com.life.query.PostQueryDTO;
 import com.life.result.PageResult;
 import com.life.result.Result;
@@ -70,5 +71,15 @@ public class PostController {
     public Result deletePost(@PathVariable Long id) {
         postService.deletePostById(id);
         return Result.success();
+    }
+
+    /**
+     * 转发帖子(1.5 一期): POST /post/{id}/repost — 附言可空(纯转发);
+     * 生成转发帖并原子回写源帖 repost_count, 返回完整PostVO插入信息流
+     */
+    @PostMapping("/{id}/repost")
+    public Result<PostVO> repost(@PathVariable Long id,
+                                 @RequestBody(required = false) RepostDTO repostDTO) {
+        return Result.success(postService.repost(id, repostDTO == null ? null : repostDTO.getContent()));
     }
 }

@@ -56,6 +56,16 @@ public class LifePost extends BaseEntity {
     private Integer commentCount;
 
     /**
+     * 转发数(repost_post 生成时原子 +1, 源帖删除时 -1)
+     */
+    private Integer repostCount;
+
+    /**
+     * 转发源帖子ID, 原创帖为NULL
+     */
+    private Long repostSourceId;
+
+    /**
      * 状态: 0-草稿, 1-已发布, 2-置顶, 3-隐藏, 4-已删除
      */
     private Integer status;

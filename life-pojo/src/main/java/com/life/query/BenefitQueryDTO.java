@@ -29,4 +29,9 @@ public class BenefitQueryDTO extends QueryDTO {
      * 排序方式: 1-综合(默认,按sort), 2-销量, 3-积分价格升序, 4-积分价格降序
      */
     private Integer sortType;
+
+    /**
+     * 权益类型: 1-券码, 2-直充; 不传查全部（C端领券中心传1, 积分兑换小商品传2）
+     */
+    private Integer benefitType;
 }

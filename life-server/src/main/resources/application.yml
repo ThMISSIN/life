@@ -17,6 +17,18 @@ spring:
       port: ${life.redis.port}
       password: ${life.redis.password}
       database: ${life.redis.database}
+  rabbitmq:
+    host: ${life.rabbitmq.host}
+    port: ${life.rabbitmq.port}
+    username: ${life.rabbitmq.username}
+    password: ${life.rabbitmq.password}
+    virtual-host: ${life.rabbitmq.vhost:/}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 1
 
 mybatis-plus:
   #mapper配置文件
@@ -39,13 +51,17 @@ life:
     user-secret-key: tinkllos
     user-ttl: 7200000
     user-token-name: authentication
-  #阿里云OSS
+  #阿里云OSS（绑定 AliOssProperties: prefix=life.aliyun, 真实值在 dev 配置 life.alioss.*）
   aliyun:
-    oss:
-      endpoint: ${life.aliyun.oss.endpoint}
-      access-key-id: ${life.aliyun.oss.access-key-id}
-      access-key-secret: ${life.aliyun.oss.access-key-secret}
-      bucket-name: ${life.aliyun.oss.bucket-name}
+    endpoint: ${life.alioss.endpoint}
+    access-key-id: ${life.alioss.access-key-id}
+    access-key-secret: ${life.alioss.access-key-secret}
+    bucket-name: ${life.alioss.bucket-name}
+  #图片存储通道: local-本地磁盘(默认, 项目自带 AK 已被云端禁用) / oss-阿里云
+  storage:
+    type: local
+  local-storage:
+    base-path: uploads
   wechat:
     appid: ${life.wechat.appid}
     secret: ${life.wechat.secret}
