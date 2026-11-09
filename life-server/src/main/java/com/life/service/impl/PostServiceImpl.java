@@ -6,7 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.life.constant.BizTypeConstant;
 import com.life.constant.PostStatusConstant;
-import com.life.constant.RedisKeyConstant;
+import com.life.constant.RedisConstant;
 import com.life.context.BaseContext;
 import com.life.dto.PostPublishDTO;
 import com.life.entity.LifeFollow;
@@ -19,9 +19,11 @@ import com.life.mapper.LifeFollowMapper;
 import com.life.mapper.LifePostMapper;
 import com.life.query.PostQueryDTO;
 import com.life.result.PageResult;
-import com.life.result.Result;
 import com.life.service.FavoriteService;
 import com.life.service.LikeService;
+import com.life.service.PostBloomService;
+import com.life.service.PostFeedCacheService;
+import com.life.service.PostHotService;
 import com.life.service.PostService;
 import com.life.service.UserService;
 import com.life.vo.AuthorVO;
@@ -33,12 +35,10 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -57,6 +57,13 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
     private FavoriteService favoriteService;
     @Autowired
     private LifeFollowMapper lifeFollowMapper;
+    // ===== 2.11 热度推荐信息流 =====
+    @Autowired
+    private PostHotService postHotService;
+    @Autowired
+    private PostFeedCacheService postFeedCacheService;
+    @Autowired
+    private PostBloomService postBloomService;
 
     // @Override
     // public PostVO publishPost(PostPublishDTO postDTO) {
@@ -238,6 +245,11 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
             throw new BaseException("帖子发布失败，请重试");
         }
 
+        // 4.1 热度初始化(2.11): 基础分+新帖24h扶持即时入账, 布隆登记id, 首页缓存即时失效
+        postHotService.recalc(post.getId());
+        postBloomService.add(post.getId());
+        postFeedCacheService.evictHotFeed();
+
         // 5. 发布成功后清理Redis草稿, 否则下次打开发布框仍会回填已发布内容
         redisTemplate.delete(draftKey(userId));
 
@@ -284,7 +296,7 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
         // 3. 非空则只缓存DTO(前端关心的最小载荷), 丢弃无意义的id字段
         postDTO.setId(null);
         redisTemplate.opsForValue().set(draftKey(userId), JSON.toJSONString(postDTO),
-                RedisKeyConstant.POST_DRAFT_TTL_DAYS, TimeUnit.DAYS);
+                RedisConstant.POST_DRAFT_TTL_DAYS, TimeUnit.DAYS);
 
         // 4. 返回草稿VO(无id, Redis草稿仅用于回填编辑器)
         return toDraftVO(postDTO);
@@ -332,7 +344,11 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
         }
         if (post != null && post.getRepostSourceId() != null) {
             baseMapper.decRepostCount(post.getRepostSourceId());
+            // 源帖转发权重变化, 顺路刷新热度(布隆无删除语义: 误判存在由DB兜底, 无需回冲)
+            postHotService.recalc(post.getRepostSourceId());
         }
+        // 页码内容变化(该行从各页消失), 推荐流缓存即时失效
+        postFeedCacheService.evictHotFeed();
     }
 
     /**
@@ -343,6 +359,10 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
     @Transactional(rollbackFor = Exception.class)
     public PostVO repost(Long postId, String remark) {
         Long userId = BaseContext.getCurrentId();
+        // 2.11 穿透防线: 布隆判定"必不存在"直接拒绝, 不打DB(过滤器未就绪/异常时 fail-open 照常走)
+        if (!postBloomService.mightContain(postId)) {
+            throw new ValidationException("帖子不存在或不可转发");
+        }
         LifePost source = getById(postId);
         if (source == null || source.getStatus() == null
                 || (source.getStatus() != PostStatusConstant.PUBLISHED
@@ -366,6 +386,13 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
         if (baseMapper.incRepostCount(postId) == 0) {
             throw new BaseException("源帖已被删除, 转发失败");
         }
+
+        // 热度联动(2.11): 源帖转发权重+1、转发帖基础分+新帖扶持各自重算;
+        // 同事务内可见最新计数, 提交前失效缓存(极小概率被并发读回填旧页, 短TTL内自愈)
+        postBloomService.add(repost.getId());
+        postHotService.recalc(postId);
+        postHotService.recalc(repost.getId());
+        postFeedCacheService.evictHotFeed();
 
         // 组装返回VO: 本人作者信息 + 源帖摘要, 前端直接插入信息流
         LifeUser me = userService.getById(userId);
@@ -409,11 +436,25 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
         // 关注流子查询依赖登录态, 强制覆盖防前端伪造
         query.setCurrentUserId(me);
 
-        Page<LifePost> page = new Page<>(query.getPageNum(), query.getPageSize());
-        Page<LifePost> resultPage = baseMapper.queryPostPage(page, query);
-        List<LifePost> posts = resultPage.getRecords();
+        long total;
+        List<LifePost> posts;
+        if (isPureHotFeed(query)) {
+            // 2.11 多级缓存: 纯推荐流(无用户/关键词/分类条件)按实体页缓存,
+            // 用户态字段(liked/favorited/followed)仍在本方法后续实时组装
+            PostFeedCacheService.FeedPageSnapshot snapshot = postFeedCacheService.loadHotFeedPage(
+                    query.getPageNum(), query.getPageSize(),
+                    () -> baseMapper.queryPostPage(
+                            new Page<>(query.getPageNum(), query.getPageSize()), query));
+            total = snapshot.getTotal();
+            posts = snapshot.getRecords();
+        } else {
+            Page<LifePost> page = new Page<>(query.getPageNum(), query.getPageSize());
+            Page<LifePost> resultPage = baseMapper.queryPostPage(page, query);
+            total = resultPage.getTotal();
+            posts = resultPage.getRecords();
+        }
         if (posts == null || posts.isEmpty()) {
-            return new PageResult(resultPage.getTotal(), List.of());
+            return new PageResult(total, List.of());
         }
 
         // 批量组装: 作者信息 / 我是否已关注 / 我是否已点赞(Redis实时)
@@ -478,10 +519,22 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
                     .build();
         }).toList();
 
-        return new PageResult(resultPage.getTotal(), vos);
+        return new PageResult(total, vos);
     }
 
     // ============ 私有方法 ============
+
+    /**
+     * 纯推荐流口径(2.11 缓存准入): type=1或缺省、无userId/keyword/category过滤——
+     * 结果与当前用户无关才允许跨用户共享缓存; 其余口径仍直查DB
+     */
+    private boolean isPureHotFeed(PostQueryDTO query) {
+        boolean hotType = query.getType() == null || query.getType() == 1;
+        return hotType
+                && query.getUserId() == null
+                && isBlank(query.getKeyword())
+                && isBlank(query.getCategory());
+    }
 
     /**
      * DTO转实体公共部分: userId + 各字段拷贝 + images序列化 + status=1(发布默认)
@@ -503,7 +556,7 @@ public class PostServiceImpl extends ServiceImpl<LifePostMapper, LifePost> imple
      * 草稿Redis key: post:draft:uid{userId}, 与签到sign:uid命名对齐(P2抽公共)
      */
     private String draftKey(Long userId) {
-        return RedisKeyConstant.POST_DRAFT.replace("{userId}", userId.toString());
+        return RedisConstant.POST_DRAFT.replace("{userId}", userId.toString());
     }
 
     // private void clearDraftByUser(Long userId) {

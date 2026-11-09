@@ -16,6 +16,7 @@ import com.life.mapper.LifePostMapper;
 import com.life.query.CommentQueryDTO;
 import com.life.service.CommentService;
 
+import com.life.service.PostHotService;
 import com.life.service.UserService;
 import com.life.utils.CollUtils;
 import com.life.vo.AuthorVO;
@@ -36,8 +37,11 @@ public class CommentServiceImpl extends ServiceImpl<LifeCommentMapper, LifeComme
     private UserService userService;
     @Autowired
     private LifePostMapper postMapper;
+    @Autowired
+    private PostHotService postHotService;
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void addComment(CommentPublishDTO replyDTO) {
         if (replyDTO.getPostId() == null || replyDTO.getContent() == null) {
             throw new IllegalArgumentException("帖子ID和评论内容不能为空");
@@ -54,6 +58,10 @@ public class CommentServiceImpl extends ServiceImpl<LifeCommentMapper, LifeComme
         }
         // 保存到数据库
         save(lifeComment);
+        // 2.11 评论计数补账(此前从不回写, 信息流"评"与热度权重均失真)+热度增量重算:
+        // 同事务回滚保"评论与计数必同时存在", 重算同连接可见最新计数
+        postMapper.incCommentCount(lifeComment.getPostId(), 1);
+        postHotService.recalc(lifeComment.getPostId());
     }
 
     @Override
@@ -135,8 +143,13 @@ public class CommentServiceImpl extends ServiceImpl<LifeCommentMapper, LifeComme
                 throw new ValidationException("无权删除该评论");
             }
         }
+        // 先数子评论再连带删除(逻辑删后count查不到), 帖计数一次回冲到位
+        long childCount = count(new LambdaQueryWrapper<LifeComment>().eq(LifeComment::getParentId, id));
         removeById(id);
         remove(new LambdaQueryWrapper<LifeComment>().eq(LifeComment::getParentId, id));
+        // 2.11: 评论计数回冲(顶级+子级) + 源帖热度增量重算
+        postMapper.incCommentCount(comment.getPostId(), -(1 + (int) childCount));
+        postHotService.recalc(comment.getPostId());
     }
 
     private AuthorVO buildAuthor(Long userId) {

@@ -45,7 +45,7 @@ public class WebMvcConfiguration implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         // 实例1：必登录拦截器，游客或无效令牌401
         registry.addInterceptor(new JwtUserInterceptor(jwtProperties, stringRedisTemplate, true))
-                .addPathPatterns("/user/**", "/benefit/**", "/admin/**", "/signRecord/**", "/points/**", "/post/**", "/follow/**", "/like/**", "/product/**", "/replies/**", "/order/**", "/cart/**", "/notice/**", "/favorite/**")
+                .addPathPatterns("/user/**", "/benefit/**", "/admin/**", "/signRecord/**", "/points/**", "/post/**", "/follow/**", "/like/**", "/product/**", "/replies/**", "/order/**", "/cart/**", "/notice/**", "/favorite/**", "/ai/**")
                 .excludePathPatterns(
                         "/user/user/login",
                         "/user/user/register",

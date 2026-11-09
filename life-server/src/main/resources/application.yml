@@ -51,6 +51,14 @@ life:
     user-secret-key: tinkllos
     user-ttl: 7200000
     user-token-name: authentication
+  # Python AI Agent 伴生服务（绑定 AgentProperties: prefix=life.agent）
+  agent:
+    enabled: true
+    base-url: http://127.0.0.1:8000/api/v1
+    # 需与 life-agent 的 AGENT_INTERNAL_TOKEN 一致；空=本地不校验（生产务必设置）
+    internal-token: ""
+    connect-timeout-seconds: 5
+    read-timeout-seconds: 120
   #阿里云OSS（绑定 AliOssProperties: prefix=life.aliyun, 真实值在 dev 配置 life.alioss.*）
   aliyun:
     endpoint: ${life.alioss.endpoint}
@@ -62,6 +70,44 @@ life:
     type: local
   local-storage:
     base-path: uploads
+  # 积分业务参数(2.5 抵扣 / 1.6 榜单结算): rate=多少积分抵1元; max-ratio=抵扣上限占订单金额百分比;
+  # rank-rewards=月度积分榜前三名奖励(逗号分隔, 按名次取用)
+  points:
+    deduct:
+      rate: 100
+      max-ratio: 50
+    rank-rewards: 100,50,20
+  # 订单: 发货后自动确认收货天数(定时任务 OrderAutoConfirmTask)
+  order:
+    auto-confirm-days: 7
+  # 热度推荐信息流(2.11): hot=公式参数(单语句重算, 调参后由扫描任务自然收敛) /
+  # feed=多级缓存与阅读回写 / bloom=帖子id布隆过滤器(防穿透)
+  post:
+    hot:
+      base-text: 20
+      base-image: 10
+      base-title: 5
+      weight-like: 3
+      weight-comment: 2
+      weight-repost: 4
+      weight-view: 0.1
+      new-post-boost: 80
+      new-post-hours: 24
+      decay-per-hour: 0.5
+      decay-max: 300
+      recalc-window-hours: 72
+      recalc-batch-size: 800
+    feed:
+      cache-enabled: true
+      redis-ttl-seconds: 30
+      caffeine-ttl-seconds: 10
+      caffeine-max-pages: 200
+      view-drain-batch-size: 50
+    bloom:
+      expected-ids: 1000000
+      fpp: 0.01
+      rebuild-on-start: true
+      rebuild-batch-size: 5000
   wechat:
     appid: ${life.wechat.appid}
     secret: ${life.wechat.secret}

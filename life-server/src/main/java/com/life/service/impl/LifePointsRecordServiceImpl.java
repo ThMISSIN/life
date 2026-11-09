@@ -18,6 +18,7 @@ import com.life.utils.BeanUtils;
 import com.life.vo.PointsRecordVO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
@@ -40,8 +41,17 @@ public class LifePointsRecordServiceImpl extends ServiceImpl<LifePointsRecordMap
         return new PageResult(resultPage.getTotal(), resultPage.getRecords());
     }
 
+    /**
+     * 签到奖励发放: 账户余额与流水同事务落库
+     * <p>
+     * 修复(2026-11-01): 原实现只写流水不入账, life_user.points 恒为 0,
+     * 权益中心「我的积分余额」卡(读 UserVO.points)显示 0 与流水对不上;
+     * 入账口径与作废退积分(LifeUserBenefitServiceImpl)一致, 走 UserMapper.addPoints 原子自增
+     */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void addSignRecord(Long userId, int points) {
+        userMapper.addPoints(userId, points);
         LifePointsRecord record = LifePointsRecord.builder()
                 .userId(userId)
                 .points(points)

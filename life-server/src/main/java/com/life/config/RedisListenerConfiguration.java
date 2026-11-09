@@ -1,6 +1,6 @@
 package com.life.config;
 
-import com.life.constant.RedisKeyConstant;
+import com.life.constant.RedisConstant;
 import com.life.listener.NoticeEventListener;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,7 +19,7 @@ public class RedisListenerConfiguration {
                                                               NoticeEventListener noticeEventListener) {
         RedisMessageListenerContainer container = new RedisMessageListenerContainer();
         container.setConnectionFactory(connectionFactory);
-        container.addMessageListener(noticeEventListener, new ChannelTopic(RedisKeyConstant.NOTICE_PUSH_CHANNEL));
+        container.addMessageListener(noticeEventListener, new ChannelTopic(RedisConstant.NOTICE_PUSH_CHANNEL));
         return container;
     }
 }

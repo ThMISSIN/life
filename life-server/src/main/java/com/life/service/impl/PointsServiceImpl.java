@@ -1,28 +1,45 @@
 package com.life.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.life.constant.PointsTypeConstant;
 import com.life.context.BaseContext;
+import com.life.entity.LifePointsRecord;
 import com.life.entity.LifeUser;
 import com.life.exception.ValidationException;
 import com.life.mapper.LifePointsRecordMapper;
+import com.life.mapper.UserMapper;
 import com.life.query.QueryDTO;
 import com.life.service.PointsService;
 import com.life.service.UserService;
 import com.life.vo.PointsRankVO;
 import com.life.vo.PointsSummaryVO;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 @Service
+@Slf4j
 public class PointsServiceImpl implements PointsService {
 
     @Autowired
     private UserService userService;
     @Autowired
     private LifePointsRecordMapper pointsRecordMapper;
+    @Autowired
+    private UserMapper userMapper;
+
+    /**
+     * 积分榜前三名奖励(逗号分隔, 名次1/2/3), 结算时按位取用
+     */
+    @Value("${life.points.rank-rewards:100,50,20}")
+    private String rankRewards;
 
     @Override
     public PointsSummaryVO querySummary() {
@@ -87,15 +104,56 @@ public class PointsServiceImpl implements PointsService {
                 .build();
     }
 
+    /**
+     * 月度榜单结算(定时任务入口, 无登录态): 结算上个自然月前三名, 发放奖励积分。
+     * <p>
+     * 幂等: 结算批次号 order_no = "RANK:yyyyMM:名次", 发放前查重, 重复触发(任务重跑/手动补发)安全;
+     * 入账与流水同事务(单用户维度整体成功/失败由外层事务统一保证, 前三名量级小);
+     * 发分入口待 roadmap 2.2 changePoints 落地后收进统一链路
+     */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void settleMonthlyRank() {
-        // TODO 1. 计算上个自然月起止(如 2026-10-01 00:00 ~ 2026-11-01 00:00)与结算批次 "RANK:yyyyMM"
-        // TODO 2. 聚合上月前三: selectMonthRankBoard(上月start, 上月end, 0, 3)
-        // TODO 3. 逐名发放奖励(建议金额 yml 配置 @Value 注入, 避免写死):
-        //         幂等 — 发放前查流水 type=RANK_REWARD 且 order_no="RANK:yyyyMM:名次" 是否已存在, 已存在跳过;
-        //         落库 — life_user.points 加奖励值 + 写流水(type=RANK_REWARD, 正数, order_no=幂等键, remark="x月积分榜第n名"),
-        //                余额更新与流水插入需同一事务;
-        //         发分入口待 roadmap 2.2 changePoints 落地后收进统一链路
-        // TODO 4. 上月无人获得积分(空榜)时直接跳过
+        // 1. 上个自然月起止 + 结算批次
+        LocalDate lastMonth = LocalDate.now().minusMonths(1).withDayOfMonth(1);
+        LocalDateTime start = lastMonth.atStartOfDay();
+        LocalDateTime end = start.plusMonths(1);
+        String batch = "RANK:" + lastMonth.format(DateTimeFormatter.ofPattern("yyyyMM"));
+
+        // 2. 上月前三(口径与 C 端榜单一致: 正数流水聚合倒序; rank=行序+1)
+        List<PointsRankVO> top3 = pointsRecordMapper.selectMonthRankBoard(start, end, 0, 3);
+        if (top3.isEmpty()) {
+            log.info("积分榜结算 {}: 空榜跳过", batch);
+            return;
+        }
+
+        // 3. 逐名发放(奖励金额 yml 配置, 名次超出配置长度即止)
+        String[] rewards = rankRewards.split(",");
+        for (int i = 0; i < top3.size(); i++) {
+            if (i >= rewards.length) {
+                break;
+            }
+            int reward = Integer.parseInt(rewards[i].trim());
+            if (reward <= 0) {
+                continue;
+            }
+            PointsRankVO winner = top3.get(i);
+            String orderNo = batch + ":" + (i + 1);
+            Long settled = pointsRecordMapper.selectCount(new LambdaQueryWrapper<LifePointsRecord>()
+                    .eq(LifePointsRecord::getType, PointsTypeConstant.RANK_REWARD)
+                    .eq(LifePointsRecord::getOrderNo, orderNo));
+            if (settled != null && settled > 0) {
+                continue;
+            }
+            userMapper.addPoints(winner.getUserId(), reward);
+            pointsRecordMapper.insert(LifePointsRecord.builder()
+                    .userId(winner.getUserId())
+                    .type(PointsTypeConstant.RANK_REWARD)
+                    .points(reward)
+                    .orderNo(orderNo)
+                    .remark(lastMonth.getMonthValue() + "月积分榜第" + (i + 1) + "名奖励")
+                    .build());
+            log.info("积分榜结算 {}: 第{}名 userId={} 发放 {} 分", batch, i + 1, winner.getUserId(), reward);
+        }
     }
 }

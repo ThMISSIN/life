@@ -1,13 +1,12 @@
 package com.life.service.impl;
 
-import com.life.constant.RedisKeyConstant;
+import com.life.constant.RedisConstant;
 import com.life.constant.SignRewardConstant;
 import com.life.context.BaseContext;
-import com.life.entity.BaseEntity;
 import com.life.entity.SignResultVO;
 import com.life.exception.BaseException;
-import com.life.service.LifePointsRecordService;
 import com.life.service.SignRecordService;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.connection.BitFieldSubCommands;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -16,7 +15,9 @@ import org.springframework.util.CollectionUtils;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class SignRecordServiceImpl implements SignRecordService {
@@ -24,7 +25,7 @@ public class SignRecordServiceImpl implements SignRecordService {
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
     @Autowired
-    private LifePointsRecordService lifePointsRecordService;
+    private RabbitTemplate rabbitTemplate;
 
     @Override
     public SignResultVO addSignRecords() {
@@ -33,8 +34,8 @@ public class SignRecordServiceImpl implements SignRecordService {
         // 获取当前日期
         LocalDate now = LocalDate.now();
         // key
-        String key = RedisKeyConstant.SIGN_RECORD + userId
-                + now.format(DateTimeFormatter.ofPattern(RedisKeyConstant.SIGN_MONTH_FORMAT));
+        String key = RedisConstant.SIGN_RECORD + userId
+                + now.format(DateTimeFormatter.ofPattern(RedisConstant.SIGN_MONTH_FORMAT));
         // 计算offset
         int offset = now.getDayOfMonth() - 1;
         // 使用redis bitmap 记录签到信息
@@ -60,11 +61,23 @@ public class SignRecordServiceImpl implements SignRecordService {
                 break;
         }
 
-        // TODO 后续升级为 rabbitMq
-        lifePointsRecordService.addSignRecord(userId, rewardPoints + SignRewardConstant.BASE_POINTS);
+        // 签到奖励走 RabbitMQ 异步发放: 生产 points.direct/sign.in,
+        // 消费方 AddPointsListener → LifePointsRecordService.addSignRecord(入账+流水同事务)
+        // 连接参数见 application-dev.yml 的 life.rabbitmq.*(AMQP 端口是 5672, 15672 是管理台);
+        // 无 broker 时此调用会抛 AmqpException, 签到直接失败属预期
+        Map<String, Object> msgMap = new HashMap<>();
+        msgMap.put("userId", userId);
+        msgMap.put("points", rewardPoints + SignRewardConstant.BASE_POINTS);
+
+        rabbitTemplate.convertAndSend(
+                "points.direct",
+                "sign.in",
+                msgMap
+        );
 
         SignResultVO vo = new SignResultVO();
         vo.setSignDays(continueDays);
+        vo.setSignPoints(SignRewardConstant.BASE_POINTS);
         vo.setRewardPoints(rewardPoints);
 
 
@@ -77,8 +90,8 @@ public class SignRecordServiceImpl implements SignRecordService {
         LocalDate now = LocalDate.now();
         // 获取登录用户
         Long userId = BaseContext.getCurrentId();
-        String key = RedisKeyConstant.SIGN_RECORD + userId
-                + now.format(DateTimeFormatter.ofPattern(RedisKeyConstant.SIGN_MONTH_FORMAT));
+        String key = RedisConstant.SIGN_RECORD + userId
+                + now.format(DateTimeFormatter.ofPattern(RedisConstant.SIGN_MONTH_FORMAT));
 
         int dayOfMonth = now.getDayOfMonth();
 

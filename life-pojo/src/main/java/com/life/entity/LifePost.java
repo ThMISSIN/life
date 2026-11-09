@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
+import java.math.BigDecimal;
+
 /**
  * 帖子表
  */
@@ -69,4 +71,10 @@ public class LifePost extends BaseEntity {
      * 状态: 0-草稿, 1-已发布, 2-置顶, 3-隐藏, 4-已删除
      */
     private Integer status;
+
+    /**
+     * 热度分(2.11): 基础分+互动权重(赞/评/转/阅)+新帖扶持-时间衰减;
+     * 发帖初始化、互动回写增量、衰减扫描任务维护, 信息流按此排序
+     */
+    private BigDecimal hotScore;
 }

@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
- * C端购物车接口(均需登录, /cart/** 已注册拦截器) — 路由与出入参已定, 核心逻辑见 CartServiceImpl TODO
+ * C端购物车接口
  */
 @RestController
 @RequestMapping("/cart")

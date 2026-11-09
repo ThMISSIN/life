@@ -1,13 +1,12 @@
 package com.life.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
-import cn.hutool.core.util.ObjectUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.life.constant.BenefitConstant;
 import com.life.constant.ProductConstant;
-import com.life.constant.RedisKeyConstant;
+import com.life.constant.RedisConstant;
 import com.life.constant.StatusConstant;
 import com.life.context.BaseContext;
 import com.life.dto.CartAddDTO;
@@ -24,12 +23,12 @@ import com.life.service.LifeBenefitService;
 import com.life.service.LifeProductService;
 import com.life.service.UserService;
 import com.life.utils.BeanUtils;
-import com.life.utils.ObjectUtils;
 import com.life.vo.CartVO;
+import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.util.CollectionUtils;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -38,7 +37,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static cn.hutool.core.util.NumberUtil.nullToZero;
-import static com.life.constant.RedisKeyConstant.ROW_MAX_QUANTITY;
+import static com.life.constant.RedisConstant.ROW_MAX_QUANTITY;
 
 /**
  * 购物车服务实现
@@ -49,6 +48,7 @@ import static com.life.constant.RedisKeyConstant.ROW_MAX_QUANTITY;
  *   勾选行ID经 OrderSubmitDTO.cartIds 传入, 由 submitOrder 在下单同事务内清理购物车行
  *   (当前用户ID统一走 BaseContext.getCurrentId(), 无需注入)
  */
+@Slf4j
 @Service
 public class CartServiceImpl extends ServiceImpl<LifeCartMapper, LifeCart> implements CartService {
 
@@ -63,12 +63,11 @@ public class CartServiceImpl extends ServiceImpl<LifeCartMapper, LifeCart> imple
     @Autowired
     private UserService userService;
     @Autowired
-    private StringRedisTemplate redisTemplate;
+    private RedissonClient redissonClient;
     @Autowired
     private LifeCartMapper cartMapper;
 
     @Override
-    // TODO 锁后续仍可以优化
     public void addCart(CartAddDTO addDTO) {
         Integer itemType = addDTO.getItemType();
         Long itemId = addDTO.getItemId();
@@ -108,16 +107,28 @@ public class CartServiceImpl extends ServiceImpl<LifeCartMapper, LifeCart> imple
             pointsPrice = nullToZero(benefit.getPointsPrice());
         }
 
-        // 4. 并发锁(粒度=用户+商品行): 双击/并发请求若同时走到步骤5, 两个都查不到旧行会各插一条,
-        //    出现两行同款 → 后续 getOne 命中多行直接报错。setnx 拿不到锁说明同款正在加购, 快速失败
-        String lockKey = RedisKeyConstant.CART_ADD_LOCK
+        // 4. 并发锁(粒度=用户+商品行, Redisson RLock): 双击/并发请求若同时走到步骤5, 两个都查不到旧行会各插一条,
+        //    出现两行同款 → 后续 getOne 命中多行直接报错。拿不到锁说明同款正在加购, 快速失败
+        String lockKey = RedisConstant.CART_ADD_LOCK
                 .replace("{userId}", userId.toString())
                 .replace("{itemType}", addDTO.getItemType().toString())
                 .replace("{itemId}", addDTO.getItemId().toString());
-        Boolean locked = redisTemplate.opsForValue()
-                .setIfAbsent(lockKey, "1", RedisKeyConstant.CART_ADD_LOCK_TTL_SECONDS, TimeUnit.SECONDS);
-        if (!Boolean.TRUE.equals(locked)) {
+        RLock lock = redissonClient.getLock(lockKey);
+        long begin = System.currentTimeMillis();
+        boolean locked;
+        try {
+            // waitTime=0 不重试; 不传 leaseTime 走看门狗自动续期(业务超时锁不失效, 进程宕机约30s后自动释放)
+            locked = lock.tryLock(0, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             throw new ValidationException("操作太频繁, 请稍后重试");
+        }
+        if (!locked) {
+            log.warn("加购抢锁失败 userId={} key={} cost={}ms", userId, lockKey, System.currentTimeMillis() - begin);
+            throw new ValidationException("操作太频繁, 请稍后重试");
+        }
+        if (log.isDebugEnabled()) {
+            log.debug("加购锁获取成功 userId={} key={} cost={}ms", userId, lockKey, System.currentTimeMillis() - begin);
         }
         try {
             // 5. 合并或插入: 查当前用户同类型同款行
@@ -152,10 +163,13 @@ public class CartServiceImpl extends ServiceImpl<LifeCartMapper, LifeCart> imple
                 save(cart);          // createTime/creater/deleted=0 自动填充, 无需手动 set
             }
         } finally {
-            // 6. 释放锁。极端情况: 业务执行超过TTL → 锁已自动过期被他人持有, 此处 delete 会误删他人锁。
-            //    加购是毫秒级操作, 5s TTL 下风险可忽略; 严格版做法 = value 存请求ID + Lua 校验后删
-            //    (后续做限兑锁 exchange:{userId}:{benefitId} 时建议直接上严格版, 两处同款)
-            redisTemplate.delete(lockKey);
+            // 6. 释放锁: isHeldByCurrentThread 守卫——极端情况(Redis 分区看门狗停摆、锁过期中转他人)
+            //    直接 unlock 会抛 IllegalMonitorStateException 且误删他人锁(旧 setnx+delete 的严格版TODO至此闭环)
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            } else {
+                log.warn("加购锁已非本线程持有(疑看门狗续期失败/锁过期), 跳过释放 key={}", lockKey);
+            }
         }
     }
 
@@ -229,6 +243,13 @@ public class CartServiceImpl extends ServiceImpl<LifeCartMapper, LifeCart> imple
                     vo.setCreateTime(LocalDateTime.now());
                     vo.setOnSale(isOnSale);
                     vo.setValid(isOnSale && stock != ProductConstant.NO_STOCK);
+                    // 快照价与实时价不一致: 以实时价为准并置 priceChanged 提示前端(结算也按实时价扣减)
+                    if (isPriceChanged(nullToZero(product.getPrice()), nullToZero(product.getPointsPrice()),
+                            nullToZero(c.getPrice()), nullToZero(c.getPointsPrice()))) {
+                        vo.setPrice(nullToZero(product.getPrice()));
+                        vo.setPointsPrice(nullToZero(product.getPointsPrice()));
+                        vo.setPriceChanged(true);
+                    }
                 }
             } else {
               // 权益商品
@@ -251,13 +272,25 @@ public class CartServiceImpl extends ServiceImpl<LifeCartMapper, LifeCart> imple
                     vo.setCreateTime(LocalDateTime.now());
                     vo.setOnSale(isOnSale && !expired);
                     vo.setValid(isOnSale && !expired && stock != BenefitConstant.NO_STOCK);
+                    // 权益无现金价, 仅比对积分价
+                    if (isPriceChanged(0, nullToZero(benefit.getPointsPrice()),
+                            0, nullToZero(c.getPointsPrice()))) {
+                        vo.setPointsPrice(nullToZero(benefit.getPointsPrice()));
+                        vo.setPriceChanged(true);
+                    }
                 }
             }
             cartVOS.add(vo);
         }
 
         return cartVOS;
-        // TODO 4. 可选: 快照价与实时价不一致时以实时价为准并加 priceChanged 标记提示前端
+    }
+
+    /**
+     * 快照价与实时价是否发生变动(现金/积分任一维度不一致即算); 上下架失效行不参与比价
+     */
+    private boolean isPriceChanged(int curPrice, int curPoints, int snapPrice, int snapPoints) {
+        return curPrice != snapPrice || curPoints != snapPoints;
     }
 
     @Override

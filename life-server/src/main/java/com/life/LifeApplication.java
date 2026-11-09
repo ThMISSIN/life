@@ -10,7 +10,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @SpringBootApplication
 @EnableTransactionManagement //开启注解方式的事务管理
 // @EnableCaching//开启缓存功能
-// @EnableScheduling//开启任务调度
+@EnableScheduling//开启任务调度(LikedTimesCheckTask 点赞回写 / PointsRankSettleTask 月度结算 / OrderAutoConfirmTask 超时自动确认)
 @Slf4j
 public class LifeApplication {
     public static void main(String[] args) {

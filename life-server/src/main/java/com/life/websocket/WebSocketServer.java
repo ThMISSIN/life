@@ -1,7 +1,7 @@
 package com.life.websocket;
 
 import com.life.constant.JwtClaimsConstant;
-import com.life.constant.RedisKeyConstant;
+import com.life.constant.RedisConstant;
 import com.life.json.JacksonObjectMapper;
 import com.life.properties.JwtProperties;
 import com.life.utils.JwtUtil;
@@ -186,7 +186,7 @@ public class WebSocketServer {
             return null;
         }
         try {
-            Boolean blacklisted = stringRedisTemplate.hasKey(RedisKeyConstant.USER_TOKEN_BLACKLIST + token);
+            Boolean blacklisted = stringRedisTemplate.hasKey(RedisConstant.USER_TOKEN_BLACKLIST + token);
             if (Boolean.TRUE.equals(blacklisted)) {
                 return null;
             }

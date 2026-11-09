@@ -2,7 +2,7 @@ package com.life.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.life.constant.BizTypeConstant;
-import com.life.constant.RedisKeyConstant;
+import com.life.constant.RedisConstant;
 import com.life.context.BaseContext;
 import com.life.dto.LikeRecordDTO;
 import com.life.dto.LikedTimesDTO;
@@ -12,6 +12,7 @@ import com.life.mapper.LifeCommentMapper;
 import com.life.mapper.LifeLikedRecordMapper;
 import com.life.mapper.LifePostMapper;
 import com.life.service.LikeService;
+import com.life.service.PostHotService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.connection.RedisConnection;
@@ -45,6 +46,8 @@ public class LikeServiceImpl extends ServiceImpl<LifeLikedRecordMapper, LifeLike
     private LifePostMapper postMapper;
     @Autowired
     private LifeCommentMapper commentMapper;
+    @Autowired
+    private PostHotService postHotService;
 
     @Override
     public void addLikeRecord(LikeRecordDTO recordDto) {
@@ -62,7 +65,7 @@ public class LikeServiceImpl extends ServiceImpl<LifeLikedRecordMapper, LifeLike
         }
         //4.使用zset将点赞数缓存到redis中
         redisTemplate.opsForZSet().add(
-                RedisKeyConstant.LIKES_TIMES.replace("{bizType}", recordDto.getBizType()),
+                RedisConstant.LIKES_TIMES.replace("{bizType}", recordDto.getBizType()),
                 recordDto.getBizId().toString(),
                 likeCount
         );
@@ -102,13 +105,15 @@ public class LikeServiceImpl extends ServiceImpl<LifeLikedRecordMapper, LifeLike
     @Override
     public void readLikedTimesAndSendMessage(String bizType, int maxBizSize) {
         //1.读取redis中的点赞数并移除
-        String key = RedisKeyConstant.LIKES_TIMES.replace("{bizType}", bizType);
-        // popmin可以取出后删除 从小到大去获取 是因为 点赞数多的对 数值不敏感，且点赞数少的可能被点赞的机会比较少，所以先执行点赞数少的
-        Set<ZSetOperations.TypedTuple<String>> tuples = redisTemplate.opsForZSet().popMin(key, maxBizSize);
+        String key = RedisConstant.LIKES_TIMES.replace("{bizType}", bizType);
+        // 从小到大取 maxBizSize 个: 点赞数多的对数值不敏感, 少的机会少需优先回写。
+        // Set<ZSetOperations.TypedTuple<String>> tuples = redisTemplate.opsForZSet().popMin(key, maxBizSize);
+        Set<ZSetOperations.TypedTuple<String>> tuples = redisTemplate.opsForZSet().rangeWithScores(key, 0, maxBizSize - 1L);
         // zset不存在/本轮无变更时直接退出, 防空转
         if (tuples == null || tuples.isEmpty()) {
             return;
         }
+        redisTemplate.opsForZSet().removeRange(key, 0, maxBizSize - 1L);
         //2. 数据转换
         List<LikedTimesDTO> list = new ArrayList<>(tuples.size());
         for (ZSetOperations.TypedTuple<String> tuple : tuples) {
@@ -118,12 +123,23 @@ public class LikeServiceImpl extends ServiceImpl<LifeLikedRecordMapper, LifeLike
         }
         //3. 一期: 同步回写业务表like_count(zset里的score是点赞SET的size终值, 整写覆盖幂等不漂移)
         //    升级MQ后此段改为投递: mqHelper.send(MqConstant.LIKE_RECORD_EXCHANGE, MqConstant.LIKE_RECORD_ROUTING_KEY, list)
+        List<Long> hotPostIds = null;
         for (LikedTimesDTO dto : list) {
             switch (bizType) {
-                case BizTypeConstant.POST -> postMapper.updateLikeCount(dto.getBizId(), dto.getLikedTimes());
+                case BizTypeConstant.POST -> {
+                    postMapper.updateLikeCount(dto.getBizId(), dto.getLikedTimes());
+                    // 2.11 热度搭本任务的车: 赞数刚落库, 同批重算热度(评论权重等取行内现值, 一并刷新)
+                    if (hotPostIds == null) {
+                        hotPostIds = new ArrayList<>(list.size());
+                    }
+                    hotPostIds.add(dto.getBizId());
+                }
                 case BizTypeConstant.COMMENT -> commentMapper.updateLikeCount(dto.getBizId(), dto.getLikedTimes());
                 default -> throw new IllegalStateException("无回写目标的bizType不应进入本轮消费: " + bizType);
             }
+        }
+        if (hotPostIds != null) {
+            postHotService.recalcBatch(hotPostIds);
         }
     }
 
@@ -131,7 +147,7 @@ public class LikeServiceImpl extends ServiceImpl<LifeLikedRecordMapper, LifeLike
     @Transactional(rollbackFor = Exception.class)
     public void saveLikeRecord(String bizType, int maxBizSize) {
         // 1. 按业务类型扫描: like:set:biz:{bizType}:* (类型入key, 只捞本类型的set, 防止串类型)
-        String typePrefix = RedisKeyConstant.LIKES_BIZ_PREFIX + bizType + ":";
+        String typePrefix = RedisConstant.LIKES_BIZ_PREFIX + bizType + ":";
         String pattern = typePrefix + "*";
 
         // 2. 使用Redis的SCAN命令扫描匹配的key
@@ -210,7 +226,7 @@ public class LikeServiceImpl extends ServiceImpl<LifeLikedRecordMapper, LifeLike
      * 拼点赞用户集合key: like:set:biz:{bizType}:{bizId}
      */
     private String bizSetKey(String bizType, Long bizId) {
-        return RedisKeyConstant.LIKES_BIZ
+        return RedisConstant.LIKES_BIZ
                 .replace("{bizType}", bizType)
                 .replace("{bizId}", bizId.toString());
     }

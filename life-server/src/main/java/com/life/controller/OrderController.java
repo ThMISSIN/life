@@ -21,6 +21,15 @@ public class OrderController {
     private final OrderService orderService;
 
     /**
+     * 签发下单幂等令牌(进入结算页/发起兑换前调用): 状态机 INIT, 提交订单时原子流转 USED 并获得处理权;
+     * 同令牌二次提交(处理中/已成功)被拒, 下单失败令牌还原后可直接重试
+     */
+    @GetMapping("/token")
+    public Result<String> token() {
+        return Result.success(orderService.generateOrderToken());
+    }
+
+    /**
      * 提交订单
      */
     @PostMapping

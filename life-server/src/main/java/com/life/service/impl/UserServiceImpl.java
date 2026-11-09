@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.life.constant.BalanceTypeConstant;
 import com.life.constant.JwtClaimsConstant;
 import com.life.constant.PasswordConstant;
-import com.life.constant.RedisKeyConstant;
+import com.life.constant.RedisConstant;
 import com.life.constant.RegexConstant;
 import com.life.constant.StatusConstant;
 import com.life.context.BaseContext;
@@ -225,7 +225,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, LifeUser> implement
         long ttl = claims.getExpiration().getTime() - System.currentTimeMillis();
         if (ttl > 0) {
             stringRedisTemplate.opsForValue().set(
-                    RedisKeyConstant.USER_TOKEN_BLACKLIST + token,
+                    RedisConstant.USER_TOKEN_BLACKLIST + token,
                     String.valueOf(claims.get(JwtClaimsConstant.USER_ID)),
                     ttl, TimeUnit.MILLISECONDS);
         }

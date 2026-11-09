@@ -2,9 +2,28 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/3.0/mybatis-3-mapper.dtd" >
 <mapper namespace="com.life.mapper.LifePostMapper">
 
+    <!-- 热度公式(2.11): hot_score = 基础分(文字/图/标题) + 互动权重(赞/评/转/阅)
+         + 新帖扶持(发布 newPostHours 内加权防沉底) - 时间衰减(每小时 decayPerHour, 封顶 decayMax);
+         参数来自 PostHotProperties(life.post.hot.*), 计数取行内现值, 单语句原子重算 -->
+    <sql id="hotScoreExpr">
+        (
+            #{h.baseText}
+            + CASE WHEN p.images IS NOT NULL AND p.images &lt;&gt; '' THEN #{h.baseImage} ELSE 0 END
+            + CASE WHEN p.title IS NOT NULL AND p.title &lt;&gt; '' THEN #{h.baseTitle} ELSE 0 END
+            + #{h.weightLike} * p.like_count
+            + #{h.weightComment} * p.comment_count
+            + #{h.weightRepost} * p.repost_count
+            + #{h.weightView} * p.view_count
+            + CASE WHEN p.create_time &gt;= DATE_SUB(NOW(), INTERVAL #{h.newPostHours} HOUR)
+                   THEN #{h.newPostBoost} ELSE 0 END
+            - LEAST(TIMESTAMPDIFF(HOUR, p.create_time, NOW()) * #{h.decayPerHour}, #{h.decayMax})
+        )
+    </sql>
+
     <!-- 帖子分页列表: 仅已发布(status=1)且未删除;
          type=2 关注流只看我关注的人发的帖; userId 查指定用户; keyword 标题/内容模糊搜索;
-         currentUserId 由服务层从登录态强制注入, 防前端伪造 -->
+         currentUserId 由服务层从登录态强制注入, 防前端伪造;
+         排序(2.11): 推荐流按 hot_score desc(扶持已入分), 关注流/个人主页动态保持时间序 -->
     <select id="queryPostPage" resultType="com.life.entity.LifePost">
         select p.*
         from life_post p
@@ -28,6 +47,36 @@
             and (p.title like concat('%', #{query.keyword}, '%')
                  or p.content like concat('%', #{query.keyword}, '%'))
         </if>
-        order by p.create_time desc, p.id desc
+        <choose>
+            <when test="query.type != null and query.type == 2 or query.userId != null">
+                order by p.create_time desc, p.id desc
+            </when>
+            <otherwise>
+                order by p.hot_score desc, p.create_time desc, p.id desc
+            </otherwise>
+        </choose>
     </select>
+
+    <update id="recalcHotScore">
+        UPDATE life_post p
+        SET p.hot_score = <include refid="hotScoreExpr"/>
+        WHERE p.id = #{postId} AND p.deleted = 0
+    </update>
+
+    <update id="recalcHotScoreByIds">
+        UPDATE life_post p
+        SET p.hot_score = <include refid="hotScoreExpr"/>
+        WHERE p.deleted = 0 AND p.id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </update>
+
+    <update id="recalcHotScoreRecent">
+        UPDATE life_post p
+        SET p.hot_score = <include refid="hotScoreExpr"/>
+        WHERE p.deleted = 0
+          AND p.status = 1
+          AND p.create_time &gt;= DATE_SUB(NOW(), INTERVAL #{h.recalcWindowHours} HOUR)
+        ORDER BY p.create_time DESC
+        LIMIT #{h.recalcBatchSize}
+    </update>
 </mapper>

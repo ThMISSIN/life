@@ -36,6 +36,12 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-cache</artifactId>
         </dependency>
+        <!-- 2.11 多级缓存 L1: Caffeine 本地热点页(版本由SpringBoot父POM管理);
+             不走starter-cache注解体系, 直接手工组装, 与L2 Redis分层语义更明确 -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
         <!-- SpringBoot WebSocket starter -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

@@ -1,10 +1,12 @@
 package com.life.controller;
 
+import com.life.context.BaseContext;
 import com.life.dto.PostPublishDTO;
 import com.life.dto.RepostDTO;
 import com.life.query.PostQueryDTO;
 import com.life.result.PageResult;
 import com.life.result.Result;
+import com.life.service.PostHotService;
 import com.life.service.PostService;
 import com.life.vo.PostVO;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +23,8 @@ public class PostController {
 
     @Autowired
     private PostService postService;
+    @Autowired
+    private PostHotService postHotService;
 
     /**
      * 帖子分页列表: 信息流(type 1-推荐 2-关注) / 指定用户动态(userId) / 关键词(keyword)
@@ -81,5 +85,16 @@ public class PostController {
     public Result<PostVO> repost(@PathVariable Long id,
                                  @RequestBody(required = false) RepostDTO repostDTO) {
         return Result.success(postService.repost(id, repostDTO == null ? null : repostDTO.getContent()));
+    }
+
+    /**
+     * 阅读上报(2.11 热度"阅"权重数据源): POST /post/{id}/view — 打开帖子评论抽屉等阅读行为时上送;
+     * 布隆挡不存在的id、同用户同帖每日计1次防刷、Redis ZSet累计增量由 PostHotTask 回写 view_count。
+     * 统计软态接口, 恒返成功(未计数场景静默), 前端不消费返回值
+     */
+    @PostMapping("/{id}/view")
+    public Result reportView(@PathVariable Long id) {
+        postHotService.recordView(id, BaseContext.getCurrentId());
+        return Result.success();
     }
 }

@@ -8,9 +8,8 @@ import org.springframework.stereotype.Component;
 /**
  * 积分榜单月度结算任务: 每月 1 号 01:00 结算上个自然月前三名, 发放奖励积分
  *
- * 启用前提: @EnableScheduling 目前在 LifeApplication 上是注释状态, 需先打开;
- * 注意打开调度会同时激活 LikedTimesCheckTask(20s 一次的点赞数同步), 若暂不想启用它,
- * 先单独注释其类上的 @Component 或 @Scheduled, 避免两个任务一起生效
+ * @EnableScheduling 已在 LifeApplication 打开(2026-11-02), 本任务与点赞回写/超时自动确认一并生效;
+ * 结算幂等由流水 order_no="RANK:yyyyMM:名次" 查重保证, 任务重跑/手动补发安全
  */
 @Component
 @RequiredArgsConstructor

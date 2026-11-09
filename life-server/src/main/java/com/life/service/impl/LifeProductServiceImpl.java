@@ -149,8 +149,9 @@ public class LifeProductServiceImpl extends ServiceImpl<LifeProductMapper, LifeP
     }
 
     /**
-     * 下单前置校验: 存在/上架/库存(-1为不限量)/等级/限购, 等级与限购口径与权益通道一致
-     * todo 已知限制: 限购是查数判断, 并发双击可超限, 后续与限兑统一用Redis锁解决
+     * 下单前置校验: 存在/上架/库存(-1为不限量)/等级/限购, 等级与限购口径与权益通道一致。
+     * 限购查数判断的并发竞态由 OrderServiceImpl.submitOrder 外层 purchase:lock 分布式锁封死(2.7),
+     * 本方法保持无状态纯校验, 可被购物车加购等只读场景安全复用
      */
     @Override
     public LifeProduct validatePurchase(Long id, int quantity, LifeUser user) {

@@ -3,12 +3,14 @@ package com.life.service.impl;
 import cn.hutool.core.date.DateUtil;
 import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.life.constant.BalanceTypeConstant;
 import com.life.constant.MessageConstant;
 import com.life.constant.PayConstant;
 import com.life.constant.PointsTypeConstant;
+import com.life.constant.RedisConstant;
 import com.life.constant.StatusConstant;
 import com.life.context.BaseContext;
 import com.life.dto.OrderItemDTO;
@@ -25,21 +27,32 @@ import com.life.service.OrderService;
 import com.life.utils.BeanUtils;
 import com.life.vo.OrderDetailVO;
 import com.life.vo.OrderVO;
+import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RBucket;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
+import org.redisson.client.codec.StringCodec;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 public class OrderServiceImpl extends ServiceImpl<LifeOrderMapper, LifeOrder> implements OrderService {
 
     @Autowired
     private StringRedisTemplate redisTemplate;
+    @Autowired
+    private RedissonClient redissonClient;
     @Autowired
     private LifeProductMapper productMapper;
     @Autowired
@@ -60,10 +73,177 @@ public class OrderServiceImpl extends ServiceImpl<LifeOrderMapper, LifeOrder> im
     private LifeBenefitService benefitService;
     @Autowired
     private LifeCartMapper cartMapper;
+    @Autowired
+    private TransactionTemplate transactionTemplate;
 
+    /**
+     * 积分抵扣配置(2.5): rate=多少积分抵1元(100积分=1元=100分, 即1积分=1分);
+     * maxRatio=抵扣上限占订单金额百分比
+     */
+    @Value("${life.points.deduct.rate:100}")
+    private int deductRate;
+    @Value("${life.points.deduct.max-ratio:50}")
+    private int deductMaxRatio;
+
+    /**
+     * 发货后自动确认收货天数(2.5 配套): 定时任务扫 status=2 且 update_time 超 N 天置3
+     */
+    @Value("${life.order.auto-confirm-days:7}")
+    private int autoConfirmDays;
+
+    /**
+     * 签发下单幂等令牌
+     * set key init 30min
+     */
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    public String generateOrderToken() {
+        Long userId = BaseContext.getCurrentId();
+        String token = UUID.randomUUID().toString().replace("-", "");
+        redissonClient.<String>getBucket(orderTokenKey(userId, token), StringCodec.INSTANCE)
+                .set(RedisConstant.ORDER_TOKEN_INIT, Duration.ofMinutes(RedisConstant.ORDER_TOKEN_TTL_MINUTES));
+        return token;
+    }
+
+    private String orderTokenKey(Long userId, String token) {
+        return RedisConstant.ORDER_TOKEN
+                .replace("{userId}", userId.toString())
+                .replace("{token}", token.trim());
+    }
+
+    /**
+     * 消费幂等令牌
+     */
+    private RBucket<String> consumeOrderToken(Long userId, String token) {
+        if (token == null || token.isBlank()) {
+            throw new ValidationException("缺少下单令牌, 请重新进入结算页");
+        }
+        String key = orderTokenKey(userId, token);
+        // 获取指定 key 对应的桶。关键点在于第二个参数 StringCodec.INSTANCE。它指定了序列化/反序列化编解码器为字符串编解码器。将对象存入和读取的值，当作纯字符串来处理
+        // 避免了 Redisson 默认使用其他编解码器（如 Kryo）可能带来的乱码或反序列化错误。这在处理简单的字符串缓存或计数器时非常有用。
+        RBucket<String> bucket = redissonClient.getBucket(key, StringCodec.INSTANCE);
+
+        // compareAndSet(expected, newValue) 是 CAS（Compare-And-Set） 操作
+        // 仅当当前值等于 expected 时，才原子地把它改成 newValue，返回 true；否则不做任何修改，返回 false。
+        if (!bucket.compareAndSet(RedisConstant.ORDER_TOKEN_INIT, RedisConstant.ORDER_TOKEN_USED)) {
+            log.warn("下单令牌流转失败 userId={} key={}", userId, key);
+            throw new ValidationException("请勿重复提交订单或令牌已过期, 请重新进入结算页");
+        }
+        return bucket;
+    }
+
+    /**
+     * 提交订单。
+     */
+    @Override
     public OrderVO submitOrder(OrderSubmitDTO submitDTO) {
+        Long userId = BaseContext.getCurrentId();
+        // 闸1: 令牌 INIT->USED
+        RBucket<String> tokenBucket = consumeOrderToken(userId, submitDTO.getOrderToken());
+        try {
+            OrderVO orderVO = submitWithOrderLocks(userId, submitDTO);
+            // 闸2完成: 下单成功, 令牌永久失效; Redis 抖动只留 USED 残留, 后果是多拒一次重放, 方向安全
+            settleTokenSuccess(tokenBucket);
+            return orderVO;
+        } catch (RuntimeException e) {
+            // 加锁失败/业务校验/事务回滚: 还原 INIT, 同令牌可重试(极端场景: 提交成功但响应丢失, 由对账兜底)
+            restoreTokenForRetry(tokenBucket);
+            throw e;
+        }
+    }
+
+    /**
+     * 闸2: 逐 key 获取 RLock(不传 leaseTime=看门狗续期), 全部拿到才进事务;
+     * 失败即抛, finally 逆序释放并做持有者校验——极端情况(Redis 分区看门狗停摆、锁已过期中转他人)
+     * 直接 unlock 会抛 IllegalMonitorStateException 且误伤他人锁;
+     * 不用 MultiLock: 其 isHeldByCurrentThread 等方法直接抛 UnsupportedOperationException, 无法安全守卫
+     */
+    private OrderVO submitWithOrderLocks(Long userId, OrderSubmitDTO submitDTO) {
+        List<String> lockKeys = buildOrderLockKeys(userId, submitDTO.getItems());
+        // 无有效订单项可锁时直接进事务, 参数合法性由 doSubmitOrder 统一校验
+        if (lockKeys.isEmpty()) {
+            return transactionTemplate.execute(status -> doSubmitOrder(submitDTO));
+        }
+        List<RLock> acquired = new ArrayList<>(lockKeys.size());
+        try {
+            for (String key : lockKeys) {
+                RLock lock = redissonClient.getLock(key);
+                long begin = System.currentTimeMillis();
+                boolean locked;
+                try {
+                    // waitTime=0 不重试(拿不齐快速失败, 用户重试即可), leaseTime 缺省走看门狗
+                    locked = lock.tryLock(0, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new ValidationException("系统繁忙, 请稍后重试");
+                }
+                long cost = System.currentTimeMillis() - begin;
+                if (!locked) {
+                    log.warn("下单加锁失败 userId={} key={} cost={}ms", userId, key, cost);
+                    throw new ValidationException("商品正在被抢购, 请稍后重试");
+                }
+                acquired.add(lock);
+                if (log.isDebugEnabled()) {
+                    log.debug("下单加锁成功 userId={} key={} cost={}ms", userId, key, cost);
+                }
+            }
+            return transactionTemplate.execute(status -> doSubmitOrder(submitDTO));
+        } finally {
+            for (int i = acquired.size() - 1; i >= 0; i--) {
+                RLock lock = acquired.get(i);
+                // 检查当前线程是否持有指定的分布式锁 lock，它返回一个布尔值。
+                if (lock.isHeldByCurrentThread()) {
+                    lock.unlock();
+                } else {
+                    log.warn("下单锁已非本线程持有(疑看门狗续期失败/锁过期), 跳过释放 key={}", lock.getName());
+                }
+            }
+        }
+    }
+
+    private void settleTokenSuccess(RBucket<String> bucket) {
+        try {
+            bucket.delete();
+        } catch (Exception e) {
+            log.warn("下单令牌置失效失败(USED残留仅拒绝重放, 不影响订单结果)", e);
+        }
+    }
+
+    private void restoreTokenForRetry(RBucket<String> bucket) {
+        try {
+            // 重置完整 TTL: 本请求未产生任何已提交副作用(事务回滚), 还原即允许同令牌重试
+            bucket.set(RedisConstant.ORDER_TOKEN_INIT, Duration.ofMinutes(RedisConstant.ORDER_TOKEN_TTL_MINUTES));
+        } catch (Exception e) {
+            log.warn("下单令牌还原失败, 用户需重新获取令牌", e);
+        }
+    }
+
+    /**
+     * 由订单行推导锁 key: 权益→exchange:lock, 商品→purchase:lock; 非法入参交由事务内统一校验
+     * <p>TreeSet 天然完成 去重+字典序排序: 所有并发请求加锁顺序一致, 顺序加锁方案(方案B)无循环等待前提
+     */
+    private List<String> buildOrderLockKeys(Long userId, List<OrderItemDTO> items) {
+        if (userId == null || items == null) {
+            return List.of();
+        }
+        Set<String> keys = new TreeSet<>();
+        for (OrderItemDTO item : items) {
+            if (item == null || item.getItemId() == null) {
+                continue;
+            }
+            if (item.getItemType() != null && item.getItemType() == 2) {
+                keys.add(RedisConstant.EXCHANGE_LOCK
+                        .replace("{userId}", userId.toString())
+                        .replace("{benefitId}", item.getItemId().toString()));
+            } else if (item.getItemType() != null && item.getItemType() == 1) {
+                keys.add(RedisConstant.PURCHASE_LOCK
+                        .replace("{userId}", userId.toString())
+                        .replace("{productId}", item.getItemId().toString()));
+            }
+        }
+        return new ArrayList<>(keys);
+    }
+
+    private OrderVO doSubmitOrder(OrderSubmitDTO submitDTO) {
         // 1、基础校验
         List<OrderItemDTO> items = submitDTO.getItems();
         if (items == null || items.isEmpty()) {
@@ -107,10 +287,11 @@ public class OrderServiceImpl extends ServiceImpl<LifeOrderMapper, LifeOrder> im
             // 3.1 实物商品订单
             orderType = 1;
             for (Map.Entry<Long, Integer> entry : productQtyMap.entrySet()) {
-                // 存在/上架/库存/等级/限购校验复用商品服务(与权益通道同一异常口径), -1表示不限量
+                // 存在/上架/库存/等级/限购校验复用商品服务(与权益通道同一异常口径), -1表示不限量;
+                // 限购并发竞态由 submitOrder 外层 purchase:lock 封死(2.7)
                 LifeProduct product = productService.validatePurchase(entry.getKey(), entry.getValue(), user);
-                // 计算订单总价
-                totalAmount += product.getPrice() * entry.getValue();
+                // 商品单以现金计价; points_price 仅等额展示, 不作强制第二货币(可选抵扣见下方 pointsDeduct)
+                totalAmount += (product.getPrice() == null ? 0 : product.getPrice()) * entry.getValue();
                 // 封装订单详情
                 LifeOrderDetail detail = new LifeOrderDetail();
                 detail.setOrderNo(orderNo);
@@ -118,16 +299,16 @@ public class OrderServiceImpl extends ServiceImpl<LifeOrderMapper, LifeOrder> im
                 detail.setItemId(product.getId());
                 detail.setItemName(product.getName());
                 detail.setItemImage(product.getCoverImage());
-                detail.setPrice(product.getPrice());
+                detail.setPrice(product.getPrice() == null ? 0 : product.getPrice());
                 detail.setQuantity(entry.getValue());
-                detail.setTotalAmount(product.getPrice() * entry.getValue());
+                detail.setTotalAmount((product.getPrice() == null ? 0 : product.getPrice()) * entry.getValue());
                 detail.setPointsPrice(product.getPointsPrice());
 
                 details.add(detail);
             }
         } else {
-            // 3.2 权益订单(纯积分兑换): 校验与发放复用权益服务公共方法, 下单即兑换唯一入口
-            // todo 已知限制: 限兑是查数判断, 并发双击可超限, 后续用Redis setnx锁 exchange:{userId}:{benefitId} 解决
+            // 3.2 权益订单(纯积分兑换): 校验与发放复用权益服务公共方法, 下单即兑换唯一入口;
+            // 限兑并发竞态由 submitOrder 外层 exchange:lock 封死(2.7)
             orderType = 2;
             for (Map.Entry<Long, Integer> entry : benefitQtyMap.entrySet()) {
                 // 校验存在/上架/等级/限兑/库存/有效期, 返回可直接用于快照的权益
@@ -150,6 +331,20 @@ public class OrderServiceImpl extends ServiceImpl<LifeOrderMapper, LifeOrder> im
                 details.add(detail);
             }
         }
+        // 3.3 商品订单可选积分抵扣(2.5): 用积分抵现金, 需为 rate 整数倍且不超过金额 maxRatio%
+        int pointsDeduct = 0;
+        int deductFen = 0;
+        if (orderType == 1 && submitDTO.getPointsDeduct() != null && submitDTO.getPointsDeduct() > 0) {
+            pointsDeduct = submitDTO.getPointsDeduct();
+            if (deductRate <= 0 || pointsDeduct % deductRate != 0) {
+                throw new ValidationException("积分抵扣需为" + deductRate + "的整数倍(整元)");
+            }
+            deductFen = pointsDeduct / deductRate * 100;
+            int maxFen = (int) (totalAmount * deductMaxRatio / 100.0);
+            if (deductFen > maxFen) {
+                throw new ValidationException("积分抵扣最多不超过订单金额的" + deductMaxRatio + "%");
+            }
+        }
         // 4、订单头: 权益订单纯积分即时结算(status=1), 商品订单待支付(status=0)
         LifeOrder order = new LifeOrder();
         order.setOrderNo(orderNo);
@@ -157,8 +352,8 @@ public class OrderServiceImpl extends ServiceImpl<LifeOrderMapper, LifeOrder> im
         order.setOrderType(orderType);
         order.setStatus(orderType == 2 ? 1 : 0);
         order.setTotalAmount(totalAmount);
-        order.setPayAmount(orderType == 2 ? 0 : totalAmount);   // TODO 商品积分抵扣上线后 = totalAmount - 抵扣金额
-        order.setPointsUsed(pointsUsed);
+        order.setPayAmount(orderType == 2 ? 0 : totalAmount - deductFen);
+        order.setPointsUsed(pointsUsed + pointsDeduct);   // 权益单=兑换积分; 商品单=抵扣积分(可选)
         order.setRemark(submitDTO.getRemark());
         // 实物订单: 校验地址归属当前用户, 并以JSON快照落库(地址后续修改不影响历史订单)
         if (orderType == 1) {
@@ -180,7 +375,22 @@ public class OrderServiceImpl extends ServiceImpl<LifeOrderMapper, LifeOrder> im
         }
 
         if (orderType == 1) {
-            // 商品订单: 原子扣库存, 0行=被并发抢完, 抛异常触发整体回滚
+            // 5.1 商品订单积分抵扣(可选, 2.5): 原子扣减 0行=积分不足整体回滚, CONSUME 流水留痕;
+            //     (pointsUsed 变量对商品单恒为0, 保留加法为纯积分商品预留通道, 随 2.8 冻结模型启用)
+            int productPoints = pointsUsed + pointsDeduct;
+            if (productPoints > 0) {
+                if (userMapper.deductPoints(userId, productPoints) == 0) {
+                    throw new ValidationException(MessageConstant.USER_POINTS_NOT_ENOUGH);
+                }
+                pointsRecordMapper.insert(LifePointsRecord.builder()
+                        .userId(userId)
+                        .type(PointsTypeConstant.CONSUME)
+                        .points(-productPoints)
+                        .orderNo(orderNo)
+                        .remark("商品订单积分抵扣")
+                        .build());
+            }
+            // 5.2 原子扣库存, 0行=被并发抢完, 抛异常触发整体回滚
             for (LifeOrderDetail detail : details) {
                 if (productMapper.deductStock(detail.getItemId(), detail.getQuantity()) == 0) {
                     throw new IllegalArgumentException("商品已被抢完: " + detail.getItemName());
@@ -289,6 +499,17 @@ public class OrderServiceImpl extends ServiceImpl<LifeOrderMapper, LifeOrder> im
         for (LifeOrderDetail detail : details) {
             productMapper.backStock(detail.getItemId(), detail.getQuantity());
         }
+        // 2.5 积分回滚: 商品单支付/抵扣过的积分原路退回(REFUND 流水, 与退库存同事务)
+        if (order.getPointsUsed() != null && order.getPointsUsed() > 0) {
+            userMapper.addPoints(order.getUserId(), order.getPointsUsed());
+            pointsRecordMapper.insert(LifePointsRecord.builder()
+                    .userId(order.getUserId())
+                    .type(PointsTypeConstant.REFUND)
+                    .points(order.getPointsUsed())
+                    .orderNo(order.getOrderNo())
+                    .remark("订单取消退回积分")
+                    .build());
+        }
     }
 
     @Override
@@ -392,7 +613,24 @@ public class OrderServiceImpl extends ServiceImpl<LifeOrderMapper, LifeOrder> im
         }
         order.setStatus(3);
         updateById(order);
-        // TODO 可加超时自动确认: 定时任务扫 status=2 且发货超N天 自动置3(依赖 deliver 时间字段, 现表暂以 update_time 近似)
+        // 超时未确认的兜底由 OrderAutoConfirmTask 定时批量置3(配置 life.order.auto-confirm-days)
+    }
+
+    /**
+     * 超时自动确认收货(定时任务入口, 无登录态): status=2 且 update_time 早于 N 天前 → 批量置3。
+     * 发货时间无独立字段, 以 update_time 近似(发货置2后若无其他更新即等价);
+     * 二期随 2.15 加 deliver_time 列精确化
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int autoConfirmTimeoutOrders() {
+        LocalDateTime deadline = LocalDateTime.now().minusDays(autoConfirmDays);
+        LambdaUpdateWrapper<LifeOrder> wrapper = new LambdaUpdateWrapper<LifeOrder>()
+                .eq(LifeOrder::getStatus, 2)
+                .lt(LifeOrder::getUpdateTime, deadline)
+                .set(LifeOrder::getStatus, 3)
+                .set(LifeOrder::getUpdateTime, LocalDateTime.now());
+        return baseMapper.update(null, wrapper);
     }
 
     private String generateOrderNumber() {

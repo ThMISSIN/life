@@ -1,7 +1,7 @@
 package com.life.interceptor;
 
 import com.life.constant.JwtClaimsConstant;
-import com.life.constant.RedisKeyConstant;
+import com.life.constant.RedisConstant;
 import com.life.context.BaseContext;
 import com.life.properties.JwtProperties;
 import com.life.utils.JwtUtil;
@@ -45,7 +45,7 @@ public class JwtUserInterceptor implements HandlerInterceptor {
 
         //2、有令牌则尝试解析：校验登出黑名单后解析JWT，写入用户身份
         if (token != null && !token.isEmpty()) {
-            Boolean isBlacklisted = stringRedisTemplate.hasKey(RedisKeyConstant.USER_TOKEN_BLACKLIST + token);
+            Boolean isBlacklisted = stringRedisTemplate.hasKey(RedisConstant.USER_TOKEN_BLACKLIST + token);
             if (!Boolean.TRUE.equals(isBlacklisted)) {
                 try {
                     Claims claims = JwtUtil.parseJWT(jwtProperties.getUserSecretKey(), token);

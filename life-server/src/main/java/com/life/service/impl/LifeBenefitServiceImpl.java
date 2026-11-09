@@ -14,6 +14,7 @@ import com.life.entity.LifeUserBenefit;
 import com.life.exception.ValidationException;
 import com.life.mapper.LifeBenefitMapper;
 import com.life.mapper.LifeUserBenefitMapper;
+import com.life.util.CouponCodeUtil;
 import com.life.query.BenefitQueryDTO;
 import com.life.result.PageResult;
 import com.life.service.LifeBenefitService;
@@ -24,7 +25,6 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 @Service
 public class LifeBenefitServiceImpl extends ServiceImpl<LifeBenefitMapper, LifeBenefit> implements LifeBenefitService {
@@ -235,12 +235,27 @@ public class LifeBenefitServiceImpl extends ServiceImpl<LifeBenefitMapper, LifeB
         userBenefit.setBenefitName(benefit.getName());
         userBenefit.setCoverImage(benefit.getCoverImage());
         userBenefit.setOrderNo(orderNo);
-        // todo 后续升级为自定义券码生成方法(短码, 便于核销输入)
-        userBenefit.setCode(UUID.randomUUID().toString().replace("-", ""));
+        userBenefit.setCode(generateUniqueCode());
         userBenefit.setEffectiveTime(now);
         userBenefit.setExpireTime(expireTime);
         userBenefit.setStatus(UserBenefitStatusConstant.UNUSED);
         return userBenefit;
+    }
+
+    /**
+     * 生成未被占用的短券码(XXXX-XXXX, 去混淆字符集): 查库冲突重试,
+     * 极端并发下 uk_code 唯一索引仍为最后防线(撞库则整单回滚, 用户重试即可)
+     */
+    private String generateUniqueCode() {
+        for (int i = 0; i < 5; i++) {
+            String code = CouponCodeUtil.generate();
+            Long exists = lifeUserBenefitMapper.selectCount(new LambdaQueryWrapper<LifeUserBenefit>()
+                    .eq(LifeUserBenefit::getCode, code));
+            if (exists == null || exists == 0) {
+                return code;
+            }
+        }
+        throw new ValidationException("券码生成失败, 请重试");
     }
 
     private Long countMyExchange(Long id, Long userId) {

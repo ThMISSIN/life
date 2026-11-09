@@ -8,7 +8,7 @@ import com.life.vo.CartVO;
 import java.util.List;
 
 /**
- * 购物车服务(C端, 均需登录) — 接口契约已定, 核心实现见 CartServiceImpl 内 TODO
+ * 购物车服务(C端, 均需登录) — 实现见 CartServiceImpl(快照+实时状态组装, 加购分布式锁, 价格变动标记)
  */
 public interface CartService extends IService<LifeCart> {
 

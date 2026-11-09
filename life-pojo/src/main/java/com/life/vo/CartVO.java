@@ -74,6 +74,12 @@ public class CartVO {
     private Boolean valid;
 
     /**
+     * 快照价与实时价不一致(2.5 配套): true 时 price/pointsPrice 已按实时值下发, 前端加"价格变动"标
+     */
+    @Builder.Default
+    private Boolean priceChanged = false;
+
+    /**
      * 加购时间
      */
     private LocalDateTime createTime;
