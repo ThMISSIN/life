@@ -1,8 +1,13 @@
 package com.life.config;
 
+import com.life.interceptor.InternalTokenInterceptor;
+import com.life.interceptor.JwtAdminInterceptor;
 import com.life.interceptor.JwtUserInterceptor;
+import com.life.interceptor.SentinelLimitInterceptor;
 import com.life.json.JacksonObjectMapper;
+import com.life.properties.AgentProperties;
 import com.life.properties.JwtProperties;
+import com.life.properties.SentinelProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,6 +33,12 @@ public class WebMvcConfiguration implements WebMvcConfigurer {
     private JwtProperties jwtProperties;
 
     @Autowired
+    private AgentProperties agentProperties;
+
+    @Autowired
+    private SentinelProperties sentinelProperties;
+
+    @Autowired
     private StringRedisTemplate stringRedisTemplate;
 
     @Value("${life.local-storage.base-path:uploads}")
@@ -36,8 +47,9 @@ public class WebMvcConfiguration implements WebMvcConfigurer {
     /**
      * 注册自定义拦截器：需登录的接口（token校验+登出黑名单校验），
      * 登录、注册、忘记密码为公开接口。
-     * /user/** 用户接口, /benefit/** 权益C端接口, /admin/** 管理端接口, /cart/** 购物车接口
-     * (管理端目前仅要求登录, 管理员身份校验待管理端鉴权方案落地后补充)
+     * /user/** 用户接口, /benefit/** 权益C端接口, /cart/** 购物车接口, /ai/** Agent接口
+     * <p>2.3 起 /admin/** 由 JwtAdminInterceptor 独立鉴权(管理端令牌+userType校验),
+     * 唯一例外 /admin/common/**(C端前端在用的上传通道, 历史路径, 仍走C端登录态)
      *
      * @param registry
      */
@@ -45,7 +57,7 @@ public class WebMvcConfiguration implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         // 实例1：必登录拦截器，游客或无效令牌401
         registry.addInterceptor(new JwtUserInterceptor(jwtProperties, stringRedisTemplate, true))
-                .addPathPatterns("/user/**", "/benefit/**", "/admin/**", "/signRecord/**", "/points/**", "/post/**", "/follow/**", "/like/**", "/product/**", "/replies/**", "/order/**", "/cart/**", "/notice/**", "/favorite/**", "/ai/**")
+                .addPathPatterns("/user/**", "/benefit/**", "/signRecord/**", "/points/**", "/post/**", "/follow/**", "/like/**", "/product/**", "/replies/**", "/order/**", "/cart/**", "/notice/**", "/favorite/**", "/ai/**", "/admin/common/**")
                 .excludePathPatterns(
                         "/user/user/login",
                         "/user/user/register",
@@ -55,6 +67,19 @@ public class WebMvcConfiguration implements WebMvcConfigurer {
         // 实例2：可选登录拦截器，带有效令牌则解析用户身份，否则按匿名放行
         registry.addInterceptor(new JwtUserInterceptor(jwtProperties, stringRedisTemplate, false))
                 .addPathPatterns("/replies/page");
+        // 实例3：内部服务拦截器（Python Agent 工具网关专用）：共享令牌校验 + X-User-Id 注入登录态
+        registry.addInterceptor(new InternalTokenInterceptor(agentProperties))
+                .addPathPatterns("/ai-tools/**");
+        // 实例4(2.3)：管理端拦截器——独立密钥+独立令牌头(默认admin-authentication)+userType=ADMIN
+        // 三重校验, 无权限403; C端令牌打管理端/管理端令牌打C端互相不可用;
+        // 管理端登录/登出与C端上传通道(/admin/common/**, 历史路径)除外
+        registry.addInterceptor(new JwtAdminInterceptor(jwtProperties, stringRedisTemplate))
+                .addPathPatterns("/admin/**")
+                .excludePathPatterns("/admin/user/login", "/admin/user/logout", "/admin/common/**");
+        // 实例5(2.10)：Sentinel 限流埋点(资源级总QPS + 单用户热点参数), 须在身份拦截器之后取到userId
+        registry.addInterceptor(new SentinelLimitInterceptor(sentinelProperties))
+                .addPathPatterns("/**")
+                .excludePathPatterns("/uploads/**");
     }
 
     /**

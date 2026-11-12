@@ -28,4 +28,7 @@ public class PointsTypeConstant {
 
     /** 榜单奖励(月度积分榜前三名, 由结算任务发放) */
     public static final int RANK_REWARD = 8;
+
+    /** 过期回收(2.8: 定时任务核销超过 expire_time 的发放流水) */
+    public static final int EXPIRE = 9;
 }

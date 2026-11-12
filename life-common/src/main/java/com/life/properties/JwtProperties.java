@@ -13,4 +13,11 @@ public class JwtProperties {
     private long userTtl;
     private String userTokenName;
 
+    /**
+     * 管理端令牌密钥(2.3): 与C端密钥分离——C端令牌无法解析通过管理端拦截器, 反之亦然;
+     * 未配置时回退 userSecretKey + userType 声明校验(纵深防御仍有效)
+     */
+    private String adminSecretKey;
+    private long adminTtl = 7200000;
+    private String adminTokenName = "admin-authentication";
 }

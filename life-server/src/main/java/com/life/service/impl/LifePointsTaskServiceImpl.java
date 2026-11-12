@@ -18,6 +18,9 @@ import java.util.List;
 @Service
 public class LifePointsTaskServiceImpl extends ServiceImpl<LifePointsTaskMapper, LifePointsTask> implements LifePointsTaskService {
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.life.service.TaskCenterService taskCenterService;
+
     @Override
     public PageResult queryCEndPage(QueryDTO query) {
         LocalDateTime now = LocalDateTime.now();
@@ -31,6 +34,8 @@ public class LifePointsTaskServiceImpl extends ServiceImpl<LifePointsTaskMapper,
 
         // 只下发展示字段, 不暴露审计/时间窗配置
         List<PointsTaskVO> vos = BeanUtils.copyList(page.getRecords(), PointsTaskVO.class);
+        // 2.4 回填本人进度: 今日完成次数/待领取次数(批量两条聚合SQL)
+        taskCenterService.fillProgress(vos, com.life.context.BaseContext.getCurrentId());
         return new PageResult(page.getTotal(), vos);
     }
 }

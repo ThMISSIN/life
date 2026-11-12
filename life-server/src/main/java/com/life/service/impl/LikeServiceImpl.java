@@ -2,17 +2,17 @@ package com.life.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.life.constant.BizTypeConstant;
+import com.life.constant.MqConstant;
 import com.life.constant.RedisConstant;
 import com.life.context.BaseContext;
 import com.life.dto.LikeRecordDTO;
 import com.life.dto.LikedTimesDTO;
+import com.life.dto.MqLikeBatchMessage;
 import com.life.entity.LifeLikedRecord;
 import com.life.exception.ValidationException;
-import com.life.mapper.LifeCommentMapper;
 import com.life.mapper.LifeLikedRecordMapper;
-import com.life.mapper.LifePostMapper;
 import com.life.service.LikeService;
-import com.life.service.PostHotService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.connection.RedisConnection;
@@ -30,6 +30,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 @Service
+@Slf4j
 public class LikeServiceImpl extends ServiceImpl<LifeLikedRecordMapper, LifeLikedRecord> implements LikeService {
     
     /**
@@ -43,15 +44,15 @@ public class LikeServiceImpl extends ServiceImpl<LifeLikedRecordMapper, LifeLike
     @Autowired
     private StringRedisTemplate redisTemplate;
     @Autowired
-    private LifePostMapper postMapper;
+    private com.life.mq.MqProducer mqProducer;
     @Autowired
-    private LifeCommentMapper commentMapper;
-    @Autowired
-    private PostHotService postHotService;
+    private com.life.service.RiskService riskService;
 
     @Override
     public void addLikeRecord(LikeRecordDTO recordDto) {
         requireSupportedBizType(recordDto.getBizType());
+        // 2.10 风控闸门: 被标记风险的用户暂停点赞(采集+滑动窗口评估在 checkAndCollect 内)
+        riskService.checkAndCollect(com.life.constant.RiskActionConstant.LIKE, BaseContext.getCurrentId());
         // 判断是点赞还是取消点赞
         Boolean success = recordDto.getLiked() ? like(recordDto) : unlike(recordDto);
         // 失败时直接返回
@@ -104,16 +105,14 @@ public class LikeServiceImpl extends ServiceImpl<LifeLikedRecordMapper, LifeLike
 
     @Override
     public void readLikedTimesAndSendMessage(String bizType, int maxBizSize) {
-        //1.读取redis中的点赞数并移除
+        //1.读取redis中的点赞数(暂不移除, 投递成功后再删, 防MQ故障丢计数)
         String key = RedisConstant.LIKES_TIMES.replace("{bizType}", bizType);
         // 从小到大取 maxBizSize 个: 点赞数多的对数值不敏感, 少的机会少需优先回写。
-        // Set<ZSetOperations.TypedTuple<String>> tuples = redisTemplate.opsForZSet().popMin(key, maxBizSize);
         Set<ZSetOperations.TypedTuple<String>> tuples = redisTemplate.opsForZSet().rangeWithScores(key, 0, maxBizSize - 1L);
         // zset不存在/本轮无变更时直接退出, 防空转
         if (tuples == null || tuples.isEmpty()) {
             return;
         }
-        redisTemplate.opsForZSet().removeRange(key, 0, maxBizSize - 1L);
         //2. 数据转换
         List<LikedTimesDTO> list = new ArrayList<>(tuples.size());
         for (ZSetOperations.TypedTuple<String> tuple : tuples) {
@@ -121,26 +120,15 @@ public class LikeServiceImpl extends ServiceImpl<LifeLikedRecordMapper, LifeLike
             Double likeTimes = tuple.getScore();
             list.add(LikedTimesDTO.of(Long.valueOf(bizId), likeTimes.intValue()));
         }
-        //3. 一期: 同步回写业务表like_count(zset里的score是点赞SET的size终值, 整写覆盖幂等不漂移)
-        //    升级MQ后此段改为投递: mqHelper.send(MqConstant.LIKE_RECORD_EXCHANGE, MqConstant.LIKE_RECORD_ROUTING_KEY, list)
-        List<Long> hotPostIds = null;
-        for (LikedTimesDTO dto : list) {
-            switch (bizType) {
-                case BizTypeConstant.POST -> {
-                    postMapper.updateLikeCount(dto.getBizId(), dto.getLikedTimes());
-                    // 2.11 热度搭本任务的车: 赞数刚落库, 同批重算热度(评论权重等取行内现值, 一并刷新)
-                    if (hotPostIds == null) {
-                        hotPostIds = new ArrayList<>(list.size());
-                    }
-                    hotPostIds.add(dto.getBizId());
-                }
-                case BizTypeConstant.COMMENT -> commentMapper.updateLikeCount(dto.getBizId(), dto.getLikedTimes());
-                default -> throw new IllegalStateException("无回写目标的bizType不应进入本轮消费: " + bizType);
-            }
+        //3. 2.12 已切MQ: 整批投递 like.record.exchange → LikeRecordListener 消费落库(like_count整写覆盖幂等
+        //   + 帖子顺路刷热度); 投递成功才 removeRange —— 失败保留zset下轮重投(at-least-once, 终值覆盖不漂移)
+        boolean sent = mqProducer.sendQuiet(MqConstant.LIKE_RECORD_EXCHANGE, MqConstant.LIKE_RECORD_ROUTING_KEY,
+                MqLikeBatchMessage.builder().bizType(bizType).items(list).build());
+        if (!sent) {
+            log.warn("点赞回写MQ投递失败, 保留zset下轮重试 bizType={} size={}", bizType, list.size());
+            return;
         }
-        if (hotPostIds != null) {
-            postHotService.recalcBatch(hotPostIds);
-        }
+        redisTemplate.opsForZSet().removeRange(key, 0, maxBizSize - 1L);
     }
 
     @Override

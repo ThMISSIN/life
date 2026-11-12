@@ -36,6 +36,10 @@ public class LifeUserBenefitServiceImpl extends ServiceImpl<LifeUserBenefitMappe
     private LifeBenefitMapper benefitMapper;
     @Autowired
     private LifePointsRecordMapper pointsRecordMapper;
+    @Autowired
+    private com.life.service.PointsService pointsService;
+    @Autowired
+    private com.life.service.StockCacheService stockCacheService;
 
     /**
      * C端「我的权益」分页: 仅本人数据, 列表不下发券码
@@ -146,19 +150,16 @@ public class LifeUserBenefitServiceImpl extends ServiceImpl<LifeUserBenefitMappe
         userBenefit.setStatus(UserBenefitStatusConstant.VOIDED);
         updateById(userBenefit);
 
-        // 2. 退积分+积分流水(退款额按权益当前积分价, 券上无积分价快照)
-        userMapper.addPoints(userBenefit.getUserId(), benefit.getPointsPrice());
-        pointsRecordMapper.insert(LifePointsRecord.builder()
-                .userId(userBenefit.getUserId())
-                .type(PointsTypeConstant.REFUND)
-                .points(benefit.getPointsPrice())
-                .orderNo(userBenefit.getOrderNo())
-                .remark("管理端作废退回: " + userBenefit.getBenefitName())
-                .build());
+        // 2. 退积分(2.2 统一入口): bizNo=VOID:{userBenefitId} 幂等防重复作废双退;
+        //    退款额按权益当前积分价, 券上无积分价快照
+        pointsService.changePoints(userBenefit.getUserId(), benefit.getPointsPrice(),
+                PointsTypeConstant.REFUND, "VOID:" + userBenefit.getId(),
+                userBenefit.getOrderNo(), "管理端作废退回: " + userBenefit.getBenefitName());
 
-        // 3. 回库存+减销量(不限量口径与扣减一致, 跳过)
+        // 3. 回库存+减销量(不限量口径与扣减一致, 跳过) + Redis 库存镜像同步回补(2.14)
         if (benefit.getStock() != null && benefit.getStock() > 0) {
             benefitMapper.backStock(benefit.getId(), 1);
+            stockCacheService.rollback(com.life.service.StockCacheService.TYPE_BENEFIT, benefit.getId(), 1);
         }
     }
 

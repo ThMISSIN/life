@@ -123,5 +123,41 @@ public class RedisConstant {
      */
     public static final String POST_BLOOM = "post:bloom:ids";
 
+    // ==================== 2.10 风控 ====================
 
+    /**
+     * 滑动窗口计数(zset): risk:win:{action}:{userId}, score=时间戳, 窗口外成员即清
+     */
+    public static final String RISK_WINDOW = "risk:win:{action}:{userId}";
+
+    /**
+     * 风险标记(暂停积分发放/点赞等敏感动作): risk:flag:{userId}, TTL 内生效
+     */
+    public static final String RISK_FLAG = "risk:flag:{userId}";
+
+    // ==================== 2.12 MQ 消费幂等 ====================
+
+    /**
+     * 通知消息消费去重: mq:notice:{msgId}, setnx 成功才处理(at-least-once 防重复落库/推送)
+     */
+    public static final String MQ_NOTICE_DEDUP = "mq:notice:{msgId}";
+
+    // ==================== 2.14 Redis库存 ====================
+
+    /**
+     * 商品/权益库存镜像: stock:{itemType}:{itemId} (itemType: product/benefit), 值=DB库存快照
+     */
+    public static final String STOCK_CACHE = "stock:{itemType}:{itemId}";
+
+    /**
+     * 已预热库存的条目注册表(set, member={itemType}:{itemId}), 对账任务遍历比对
+     */
+    public static final String STOCK_PREHEATED = "stock:preheated";
+
+    // ==================== 4.7 定时任务分布式锁 ====================
+
+    /**
+     * 任务锁前缀: task:lock:{taskName}, Redisson tryLock(waitTime=0) 抢不到即跳过本轮(多实例只跑一个)
+     */
+    public static final String TASK_LOCK = "task:lock:{taskName}";
 }

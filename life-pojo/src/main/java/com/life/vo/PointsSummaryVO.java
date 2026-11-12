@@ -28,4 +28,9 @@ public class PointsSummaryVO {
      * 本月消耗(本月负数流水之和的绝对值, 返回正数)
      */
     private Integer monthSpent;
+
+    /**
+     * 冻结积分(2.8): 待支付订单占用, 支付成功转扣减/取消解冻; 旧前端忽略此新增字段
+     */
+    private Integer frozen;
 }

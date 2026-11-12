@@ -1,10 +1,12 @@
 package com.life.service.impl;
 
 import com.life.constant.RedisConstant;
+import com.life.constant.RiskActionConstant;
 import com.life.mapper.LifePostMapper;
 import com.life.properties.PostHotProperties;
 import com.life.service.PostBloomService;
 import com.life.service.PostHotService;
+import com.life.service.RiskService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -36,6 +38,8 @@ public class PostHotServiceImpl implements PostHotService {
     private PostHotProperties properties;
     @Autowired
     private PostBloomService bloomService;
+    @Autowired
+    private RiskService riskService;
     @Autowired
     private StringRedisTemplate redisTemplate;
 
@@ -80,6 +84,12 @@ public class PostHotServiceImpl implements PostHotService {
         }
         // 缓存穿透防线①: 布隆说"没有"就是没有, 不占去重名额也不打DB
         if (!bloomService.mightContain(postId)) {
+            return false;
+        }
+        // 2.10 风控采集(阅读是软态统计, 被标记用户静默不计, 不抛错不打扰前端)
+        try {
+            riskService.checkAndCollect(RiskActionConstant.VIEW, userId);
+        } catch (Exception e) {
             return false;
         }
         // 防刷: 同一用户同一帖当日只计1次(setnx到日切, 重进详情页不重复累加)

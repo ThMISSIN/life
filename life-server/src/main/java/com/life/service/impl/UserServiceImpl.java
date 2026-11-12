@@ -58,6 +58,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, LifeUser> implement
     private com.life.mapper.LifeFollowMapper lifeFollowMapper;
     @Autowired
     private LifeBalanceRecordMapper balanceRecordMapper;
+    @Autowired
+    private com.life.service.TaskCenterService taskCenterService;
 
     @Override
     public LoginVO login(LoginDTO userLoginDTO, HttpServletRequest request) {
@@ -303,6 +305,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, LifeUser> implement
         user.setPhone(userUpdateDTO.getPhone());
         user.setEmail(userUpdateDTO.getEmail());
         this.updateById(user);
+        // 2.4 任务事件: "首次完善资料"一次性任务落完成记录(终身一次, 服务内判重)
+        taskCenterService.triggerEvent(userId, com.life.constant.TaskEventTypeConstant.PROFILE);
         return Result.success("修改成功");
     }
 

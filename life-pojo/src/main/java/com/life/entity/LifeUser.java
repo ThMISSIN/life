@@ -21,6 +21,8 @@ public class LifeUser extends BaseEntity{
     private String email;
     private Integer userType;
     private Integer points;
+    /** 冻结积分(2.8): 下单冻结/支付转扣减/取消解冻 */
+    private Integer frozenPoints;
     /** 余额(分) */
     private Integer money;
     private Integer level;

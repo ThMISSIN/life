@@ -5,10 +5,14 @@ import com.life.result.PageResult;
 import com.life.result.Result;
 import com.life.service.LifePointsTaskService;
 import com.life.service.PointsService;
+import com.life.service.RiskService;
+import com.life.service.TaskCenterService;
 import com.life.vo.PointsRankVO;
 import com.life.vo.PointsSummaryVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -27,6 +31,8 @@ public class PointsController {
 
     private final PointsService pointsService;
     private final LifePointsTaskService lifePointsTaskService;
+    private final TaskCenterService taskCenterService;
+    private final RiskService riskService;
 
     /**
      * 积分总览: 余额 + 本月获得 + 本月消耗(前端 api/user.js getPointsSummary 已切至本接口)
@@ -55,11 +61,24 @@ public class PointsController {
     }
 
     /**
-     * 积分任务 C端只读列表(1.6): GET /points/task/list — 上架任务分页(前端替换 mock 用);
-     * 领取奖励属二期(路线图 2.4)
+     * 积分任务 C端列表(1.6+2.4): GET /points/task/list — 上架任务分页 + 本人进度
+     * (todayCompleted 今日完成次数 / claimable 待领取次数, 由 TaskCenterService 批量回填)
      */
     @GetMapping("/task/list")
     public Result<PageResult> taskList(QueryDTO query) {
         return Result.success(lifePointsTaskService.queryCEndPage(query));
+    }
+
+    /**
+     * 2.4 领取任务奖励: POST /points/task/{id}/claim —
+     * 取最早一条"已完成待领取"记录 CAS 置已领取(并发双击只成功一次),
+     * 积分经 MQ 异步发放(bizNo=TASKCLAIM:{recordId} 幂等, broker故障降级同步), 返回本次积分数
+     */
+    @PostMapping("/task/{id}/claim")
+    public Result<Integer> claimTask(@PathVariable Long id) {
+        Long userId = com.life.context.BaseContext.getCurrentId();
+        // 2.10 风控闸门: 被标记风险的用户暂停积分领取
+        riskService.checkAndCollect(com.life.constant.RiskActionConstant.CLAIM, userId);
+        return Result.success(taskCenterService.claim(userId, id));
     }
 }

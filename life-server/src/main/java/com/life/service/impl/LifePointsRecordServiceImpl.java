@@ -30,6 +30,8 @@ public class LifePointsRecordServiceImpl extends ServiceImpl<LifePointsRecordMap
 
     @Autowired
     private UserMapper userMapper;
+    @Autowired
+    private com.life.service.PointsService pointsService;
 
     @Override
     public PageResult pageList(QueryDTO queryDTO) {
@@ -42,22 +44,12 @@ public class LifePointsRecordServiceImpl extends ServiceImpl<LifePointsRecordMap
     }
 
     /**
-     * 签到奖励发放: 账户余额与流水同事务落库
-     * <p>
-     * 修复(2026-11-01): 原实现只写流水不入账, life_user.points 恒为 0,
-     * 权益中心「我的积分余额」卡(读 UserVO.points)显示 0 与流水对不上;
-     * 入账口径与作废退积分(LifeUserBenefitServiceImpl)一致, 走 UserMapper.addPoints 原子自增
+     * 签到奖励发放(2.2 收编): 统一走 PointsService.changePoints(余额+流水+bizNo幂等同事务);
+     * bizNo=SIGN:{userId}:{yyyyMMdd} —— MQ at-least-once 重投/生产端重试都不会重复入账
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
-    public void addSignRecord(Long userId, int points) {
-        userMapper.addPoints(userId, points);
-        LifePointsRecord record = LifePointsRecord.builder()
-                .userId(userId)
-                .points(points)
-                .type(PointsTypeConstant.SIGN)
-                .build();
-        save(record);
+    public void addSignRecord(Long userId, int points, String bizNo) {
+        pointsService.changePoints(userId, points, PointsTypeConstant.SIGN, bizNo, "签到奖励");
     }
 
     @Override

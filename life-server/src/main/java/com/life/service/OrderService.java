@@ -61,4 +61,24 @@ public interface OrderService extends IService<LifeOrder> {
      */
     int autoConfirmTimeoutOrders();
 
+    /**
+     * 2.5 管理端退款(已支付/已发货实物单): 退款单落库(uk幂等) + 订单条件置5(CAS防双退)
+     * + 余额/积分原路退回(changePoints bizNo=RF:{orderNo}) + 库存回退(DB+Redis镜像) + MQ通知用户
+     */
+    void refundOrder(Long id, String reason);
+
+    /**
+     * 2.5/2.12 超时关单幂等入口(延迟消息消费与扫描兜底任务共用):
+     * 条件更新 status 0→4(已支付/已取消自然0行跳过) + 回库存 + 解冻抵扣积分
+     *
+     * @return true=本次执行了关单, false=订单已非待支付(无需处理)
+     */
+    boolean closeOrderIfPending(Long orderId);
+
+    /**
+     * 2.5 扫描兜底关单(定时任务入口): status=0 且 create_time 超过 life.order.auto-close-minutes
+     * 的实物单逐单走 closeOrderIfPending; 返回处理单数
+     */
+    int closeTimeoutOrders();
+
 }

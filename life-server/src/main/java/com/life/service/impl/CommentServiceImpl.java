@@ -39,6 +39,12 @@ public class CommentServiceImpl extends ServiceImpl<LifeCommentMapper, LifeComme
     private LifePostMapper postMapper;
     @Autowired
     private PostHotService postHotService;
+    @Autowired
+    private com.life.service.RiskService riskService;
+    @Autowired
+    private com.life.service.SensitiveWordService sensitiveWordService;
+    @Autowired
+    private com.life.service.TaskCenterService taskCenterService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -46,9 +52,20 @@ public class CommentServiceImpl extends ServiceImpl<LifeCommentMapper, LifeComme
         if (replyDTO.getPostId() == null || replyDTO.getContent() == null) {
             throw new IllegalArgumentException("帖子ID和评论内容不能为空");
         }
+        Long userId = BaseContext.getCurrentId();
+        // 2.10 风控闸门: 被标记风险的用户暂停评论
+        riskService.checkAndCollect(com.life.constant.RiskActionConstant.COMMENT, userId);
+        // 2.9 敏感词过滤: 评论命中 level1 拒绝 / level2 拒绝转提示 / level3 替换***(评论无审核态, 1/2同口径拦截)
+        com.life.service.SensitiveWordService.FilterResult fr = sensitiveWordService.filter(replyDTO.getContent());
+        if (fr.isHit() && fr.getMaxLevel() <= 2) {
+            throw new ValidationException("评论包含违规内容, 请修改后再试");
+        }
+        if (fr.isHit()) {
+            replyDTO.setContent(fr.getReplaced());
+        }
         // 将dto转为entity
         LifeComment lifeComment = BeanUtil.copyProperties(replyDTO, LifeComment.class);
-        lifeComment.setUserId(BaseContext.getCurrentId());
+        lifeComment.setUserId(userId);
         // 判断是否为顶级评论
         if (replyDTO.getParentId() != null) {
             lifeComment.setParentId(replyDTO.getParentId());
@@ -62,6 +79,8 @@ public class CommentServiceImpl extends ServiceImpl<LifeCommentMapper, LifeComme
         // 同事务回滚保"评论与计数必同时存在", 重算同连接可见最新计数
         postMapper.incCommentCount(lifeComment.getPostId(), 1);
         postHotService.recalc(lifeComment.getPostId());
+        // 2.4 任务事件: 评价奖励任务落完成记录
+        taskCenterService.triggerEvent(userId, com.life.constant.TaskEventTypeConstant.COMMENT);
     }
 
     @Override

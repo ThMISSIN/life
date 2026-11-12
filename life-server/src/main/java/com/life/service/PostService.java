@@ -33,4 +33,15 @@ public interface PostService extends IService<LifePost> {
     // 清理当前用户全部草稿(幂等, 无草稿不报错)
     void clearDraft();
 
+    /**
+     * 2.9 管理端审核: 待审列表(status=3 审核中, 时间倒序分页)
+     */
+    PageResult queryReviewPage(PostQueryDTO query);
+
+    /**
+     * 2.9 管理端审核动作: 通过(status 3→1 可见并进ES索引) / 驳回(3→4 不可见并移出索引);
+     * CAS 条件更新防重复审核
+     */
+    void reviewPost(Long postId, boolean pass);
+
 }

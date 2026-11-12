@@ -42,4 +42,16 @@ public class PointsTaskVO implements Serializable {
      * 每日次数限制
      */
     private Integer dailyLimit;
+
+    // ===== 2.4 当前用户进度字段(仅登录态列表回填, 游客为null) =====
+
+    /**
+     * 今日已完成次数
+     */
+    private Integer todayCompleted;
+
+    /**
+     * 待领取次数(已完成未领取, 含历史一次性任务)
+     */
+    private Integer claimable;
 }

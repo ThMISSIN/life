@@ -35,3 +35,6 @@ build/
 sql
 docs
 application-dev.yml
+
+life-server/uploads/
+

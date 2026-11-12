@@ -8,22 +8,32 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.life.constant.BalanceTypeConstant;
 import com.life.constant.MessageConstant;
+import com.life.constant.MqConstant;
+import com.life.constant.NoticeTypeConstant;
 import com.life.constant.PayConstant;
+import com.life.constant.PointsRecordStatusConstant;
 import com.life.constant.PointsTypeConstant;
 import com.life.constant.RedisConstant;
 import com.life.constant.StatusConstant;
 import com.life.context.BaseContext;
+import com.life.dto.MqNoticeMessage;
+import com.life.dto.MqOrderCloseMessage;
 import com.life.dto.OrderItemDTO;
 import com.life.dto.OrderSubmitDTO;
 import com.life.dto.PageDTO;
 import com.life.entity.*;
 import com.life.exception.ValidationException;
 import com.life.mapper.*;
+import com.life.mq.MqProducer;
 import com.life.query.OrderQueryDTO;
 import com.life.result.PageResult;
 import com.life.service.LifeBenefitService;
 import com.life.service.LifeProductService;
 import com.life.service.OrderService;
+import com.life.service.PointsService;
+import com.life.service.RiskService;
+import com.life.service.StockCacheService;
+import com.life.constant.RiskActionConstant;
 import com.life.utils.BeanUtils;
 import com.life.vo.OrderDetailVO;
 import com.life.vo.OrderVO;
@@ -34,9 +44,12 @@ import org.redisson.api.RedissonClient;
 import org.redisson.client.codec.StringCodec;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Duration;
@@ -75,6 +88,23 @@ public class OrderServiceImpl extends ServiceImpl<LifeOrderMapper, LifeOrder> im
     private LifeCartMapper cartMapper;
     @Autowired
     private TransactionTemplate transactionTemplate;
+    // ===== 2.5/2.8/2.10/2.12/2.14 新增依赖 =====
+    @Autowired
+    private PointsService pointsService;
+    @Autowired
+    private StockCacheService stockCacheService;
+    @Autowired
+    private MqProducer mqProducer;
+    @Autowired
+    private RiskService riskService;
+    @Autowired
+    private LifeRefundOrderMapper refundOrderMapper;
+    @Autowired
+    private LifePayChannelMapper payChannelMapper;
+    @Autowired
+    private LifeBenefitMapper benefitMapper;
+    @Autowired
+    private com.life.properties.StockProperties stockProperties;
 
     /**
      * 积分抵扣配置(2.5): rate=多少积分抵1元(100积分=1元=100分, 即1积分=1分);
@@ -90,6 +120,12 @@ public class OrderServiceImpl extends ServiceImpl<LifeOrderMapper, LifeOrder> im
      */
     @Value("${life.order.auto-confirm-days:7}")
     private int autoConfirmDays;
+
+    /**
+     * 超时未支付自动关单分钟数(2.5): 延迟消息TTL与扫描兜底共用同一时限
+     */
+    @Value("${life.order.auto-close-minutes:30}")
+    private int autoCloseMinutes;
 
     /**
      * 签发下单幂等令牌
@@ -137,17 +173,49 @@ public class OrderServiceImpl extends ServiceImpl<LifeOrderMapper, LifeOrder> im
     @Override
     public OrderVO submitOrder(OrderSubmitDTO submitDTO) {
         Long userId = BaseContext.getCurrentId();
+        // 2.10 风控闸门: 被标记风险的用户禁止下单(滑动窗口在 checkAndCollect 内计数)
+        riskService.checkAndCollect(RiskActionConstant.ORDER, userId);
         // 闸1: 令牌 INIT->USED
         RBucket<String> tokenBucket = consumeOrderToken(userId, submitDTO.getOrderToken());
         try {
             OrderVO orderVO = submitWithOrderLocks(userId, submitDTO);
             // 闸2完成: 下单成功, 令牌永久失效; Redis 抖动只留 USED 残留, 后果是多拒一次重放, 方向安全
             settleTokenSuccess(tokenBucket);
+            // 事务已提交, 此处发 MQ 不会产生"消息先于订单可见/订单回滚消息已出"的幽灵事件
+            afterSubmitPublished(orderVO);
             return orderVO;
         } catch (RuntimeException e) {
             // 加锁失败/业务校验/事务回滚: 还原 INIT, 同令牌可重试(极端场景: 提交成功但响应丢失, 由对账兜底)
             restoreTokenForRetry(tokenBucket);
             throw e;
+        }
+    }
+
+    /**
+     * 下单成功后的异步事件(2.12): 实物单发 TTL 延迟关单消息(到期死信转发 order.close.queue);
+     * 权益单即时成交, 发兑换成功站内通知; 均 sendQuiet —— MQ 故障不阻断下单(关单有扫描兜底, 通知可缺省)
+     */
+    private void afterSubmitPublished(OrderVO orderVO) {
+        if (orderVO == null) {
+            return;
+        }
+        if (orderVO.getOrderType() != null && orderVO.getOrderType() == 1
+                && orderVO.getStatus() != null && orderVO.getStatus() == 0) {
+            mqProducer.sendDelay(MqConstant.ORDER_DELAY_EXCHANGE, MqConstant.ORDER_DELAY_ROUTING_KEY,
+                    MqOrderCloseMessage.builder().orderId(orderVO.getId()).orderNo(orderVO.getOrderNo()).build(),
+                    autoCloseMinutes * 60_000L);
+        } else if (orderVO.getOrderType() != null && orderVO.getOrderType() == 2) {
+            mqProducer.sendQuiet(MqConstant.NOTICE_EXCHANGE, MqConstant.NOTICE_ROUTING_KEY,
+                    MqNoticeMessage.builder()
+                            .msgId(UUID.randomUUID().toString())
+                            .userId(orderVO.getUserId())
+                            .type(NoticeTypeConstant.BENEFIT)
+                            .title("兑换成功")
+                            .content("订单 " + orderVO.getOrderNo() + " 兑换成功, 消耗积分 "
+                                    + orderVO.getPointsUsed() + ", 券码已发放至「我的权益」")
+                            .bizId(orderVO.getId())
+                            .url("/benefit")
+                            .build());
         }
     }
 
@@ -374,43 +442,43 @@ public class OrderServiceImpl extends ServiceImpl<LifeOrderMapper, LifeOrder> im
             orderDetailMapper.insert(detail);
         }
 
-        if (orderType == 1) {
-            // 5.1 商品订单积分抵扣(可选, 2.5): 原子扣减 0行=积分不足整体回滚, CONSUME 流水留痕;
-            //     (pointsUsed 变量对商品单恒为0, 保留加法为纯积分商品预留通道, 随 2.8 冻结模型启用)
-            int productPoints = pointsUsed + pointsDeduct;
-            if (productPoints > 0) {
-                if (userMapper.deductPoints(userId, productPoints) == 0) {
-                    throw new ValidationException(MessageConstant.USER_POINTS_NOT_ENOUGH);
+        // 5、结算资源(积分冻结/扣减 + 库存扣减)。Redis 库存镜像(2.14)非事务资源:
+        //    预扣成功后本事务任意失败, catch 内逆序回补镜像, 极端残留由对账任务以DB为准校正
+        List<String[]> redisDeducted = new ArrayList<>();
+        try {
+            if (orderType == 1) {
+                // 5.1 商品订单积分抵扣(2.8 冻结模型): 下单 可用→冻结(FROZEN流水),
+                //     支付成功 settleFrozen 转扣减, 取消/超时关单 unfreezeFrozen 解冻回可用
+                int productPoints = pointsUsed + pointsDeduct;
+                if (productPoints > 0) {
+                    pointsService.freezePoints(userId, productPoints,
+                            "PF:" + orderNo, orderNo, "商品订单积分抵扣冻结");
                 }
-                pointsRecordMapper.insert(LifePointsRecord.builder()
-                        .userId(userId)
-                        .type(PointsTypeConstant.CONSUME)
-                        .points(-productPoints)
-                        .orderNo(orderNo)
-                        .remark("商品订单积分抵扣")
-                        .build());
-            }
-            // 5.2 原子扣库存, 0行=被并发抢完, 抛异常触发整体回滚
-            for (LifeOrderDetail detail : details) {
-                if (productMapper.deductStock(detail.getItemId(), detail.getQuantity()) == 0) {
-                    throw new IllegalArgumentException("商品已被抢完: " + detail.getItemName());
+                // 5.2 库存: Redis+Lua 预扣(热点挡量) → DB 条件扣减(权威兜底), 0行=被并发抢完整体回滚
+                for (LifeOrderDetail detail : details) {
+                    preDeductRedisStock(StockCacheService.TYPE_PRODUCT,
+                            detail.getItemId(), detail.getQuantity(), redisDeducted);
+                    if (productMapper.deductStock(detail.getItemId(), detail.getQuantity()) == 0) {
+                        throw new IllegalArgumentException("商品已被抢完: " + detail.getItemName());
+                    }
+                }
+            } else {
+                // 权益订单交易链: 纯积分即时结算 → 统一入口 changePoints(bizNo=EX:{orderNo} 幂等)
+                pointsService.changePoints(userId, -pointsUsed, PointsTypeConstant.EXCHANGE,
+                        "EX:" + orderNo, orderNo, null);
+                for (LifeBenefit benefit : benefits) {
+                    int qty = benefitQtyMap.get(benefit.getId());
+                    preDeductRedisStock(StockCacheService.TYPE_BENEFIT, benefit.getId(), qty, redisDeducted);
+                    // 原子扣库存+销量后按数量逐张发放券码(挂真实订单号可追溯)
+                    benefitService.grantExchange(benefit, qty, userId, orderNo);
                 }
             }
-        } else {
-            // 权益订单交易链: 扣积分 -> 积分流水 -> 逐权益扣库存并发放券码(挂真实订单号可追溯)
-            if (userMapper.deductPoints(userId, pointsUsed) == 0) {
-                throw new ValidationException(MessageConstant.USER_POINTS_NOT_ENOUGH);
+        } catch (RuntimeException e) {
+            for (int i = redisDeducted.size() - 1; i >= 0; i--) {
+                String[] d = redisDeducted.get(i);
+                stockCacheService.rollback(d[0], Long.valueOf(d[1]), Integer.parseInt(d[2]));
             }
-            pointsRecordMapper.insert(LifePointsRecord.builder()
-                    .userId(userId)
-                    .type(PointsTypeConstant.EXCHANGE)
-                    .points(-pointsUsed)
-                    .orderNo(orderNo)
-                    .build());
-            for (LifeBenefit benefit : benefits) {
-                // 原子扣库存+销量(0行=并发抢完), 按购买数量逐张发放
-                benefitService.grantExchange(benefit, benefitQtyMap.get(benefit.getId()), userId, orderNo);
-            }
+            throw e;
         }
         // 6、购物车来源单: 同事务清理已下单的购物车行(直购路径不传 cartIds, 跳过)
         //    userId 归属条件兜底: 混入他人/不存在的 id 只是静默不命中, 不报错也无探测泄露;
@@ -491,24 +559,41 @@ public class OrderServiceImpl extends ServiceImpl<LifeOrderMapper, LifeOrder> im
         if (order.getStatus() != 0) {
             throw new IllegalArgumentException("订单未支付才可以取消订单");
         }
-        order.setStatus(4);
-        baseMapper.updateById(order);
-        // 下单时已扣库存, 取消需退回; 置状态与退库存同事务, 要么全成要么全回滚
-        List<LifeOrderDetail> details = orderDetailMapper.selectList(new LambdaQueryWrapper<LifeOrderDetail>()
-                .eq(LifeOrderDetail::getOrderId, id));
-        for (LifeOrderDetail detail : details) {
-            productMapper.backStock(detail.getItemId(), detail.getQuantity());
+        // CAS 置4: 用户取消/延迟关单消息/扫描兜底 三方并发只有一方成功, 败者直接退出(资源不重复回滚)
+        int updated = baseMapper.update(null, new LambdaUpdateWrapper<LifeOrder>()
+                .eq(LifeOrder::getId, id)
+                .eq(LifeOrder::getStatus, 0)
+                .set(LifeOrder::getStatus, 4)
+                .set(LifeOrder::getUpdateTime, LocalDateTime.now()));
+        if (updated == 0) {
+            throw new IllegalArgumentException("订单状态已变化, 请刷新后重试");
         }
-        // 2.5 积分回滚: 商品单支付/抵扣过的积分原路退回(REFUND 流水, 与退库存同事务)
+        // 下单时已扣库存/冻结积分, 取消需回退; 与置状态同事务, 要么全成要么全回滚
+        rollbackOrderResources(order);
+    }
+
+    /**
+     * 订单资源回滚公共段(取消/超时关单共用):
+     * 库存 DB回退 + Redis镜像回补(2.14) ; 抵扣积分 解冻回可用(2.8), 旧口径订单(即时扣减)原路退回
+     */
+    private void rollbackOrderResources(LifeOrder order) {
+        List<LifeOrderDetail> details = orderDetailMapper.selectList(new LambdaQueryWrapper<LifeOrderDetail>()
+                .eq(LifeOrderDetail::getOrderId, order.getId()));
+        for (LifeOrderDetail detail : details) {
+            if (detail.getItemType() != null && detail.getItemType() == 2) {
+                // 防御分支: 权益单券码已发放, 库存回退属管理端作废链路, 取消/关单不回
+                continue;
+            }
+            productMapper.backStock(detail.getItemId(), detail.getQuantity());
+            stockCacheService.rollback(StockCacheService.TYPE_PRODUCT, detail.getItemId(), detail.getQuantity());
+        }
         if (order.getPointsUsed() != null && order.getPointsUsed() > 0) {
-            userMapper.addPoints(order.getUserId(), order.getPointsUsed());
-            pointsRecordMapper.insert(LifePointsRecord.builder()
-                    .userId(order.getUserId())
-                    .type(PointsTypeConstant.REFUND)
-                    .points(order.getPointsUsed())
-                    .orderNo(order.getOrderNo())
-                    .remark("订单取消退回积分")
-                    .build());
+            boolean unfrozen = pointsService.unfreezeFrozen("PF:" + order.getOrderNo());
+            if (!unfrozen) {
+                // 兼容 2.8 之前的旧口径订单(下单即扣减, 无冻结流水): 原路退回, bizNo 幂等防双退
+                pointsService.changePoints(order.getUserId(), order.getPointsUsed(), PointsTypeConstant.REFUND,
+                        "OCRF:" + order.getOrderNo(), order.getOrderNo(), "订单取消退回积分");
+            }
         }
     }
 
@@ -524,6 +609,17 @@ public class OrderServiceImpl extends ServiceImpl<LifeOrderMapper, LifeOrder> im
         // 仅待支付可支付(权益单纯积分即时成交status直接为1, 天然无支付环节)
         if (order.getStatus() != 0) {
             throw new ValidationException("订单当前状态不可支付");
+        }
+
+        // 0. 渠道表驱动校验(2.6): life_pay_channel 有数据时 BALANCE 必须启用; 空表兼容放行
+        Long channelTotal = payChannelMapper.selectCount(null);
+        if (channelTotal != null && channelTotal > 0) {
+            Long balanceEnabled = payChannelMapper.selectCount(new LambdaQueryWrapper<LifePayChannel>()
+                    .eq(LifePayChannel::getCode, PayConstant.CHANNEL_BALANCE)
+                    .eq(LifePayChannel::getStatus, 1));
+            if (balanceEnabled == null || balanceEnabled == 0) {
+                throw new ValidationException("余额支付渠道未开放, 请稍后再试");
+            }
         }
 
         // 1. 落支付单: 模拟支付同步成功直接置2, 真实渠道接入后改为 0->回调->2; uk_biz_order_no 保证与业务单1:1
@@ -559,6 +655,51 @@ public class OrderServiceImpl extends ServiceImpl<LifeOrderMapper, LifeOrder> im
         order.setPayChannel(PayConstant.CHANNEL_BALANCE);
         order.setPayTime(payOrder.getPayTime());
         updateById(order);
+
+        // 5. 抵扣积分冻结转扣减(2.8): FROZEN→SETTLED; 旧口径订单无冻结流水返回false属正常
+        pointsService.settleFrozen("PF:" + order.getOrderNo());
+
+        // 5.1 消费力度返积分(2026-11-12): 基础返(1分/元)+阶梯加赠, 同事务入账(bizNo=REBATE:单号 幂等)
+        int rebate = pointsService.computeConsumeRebate(order.getPayAmount() == null ? 0 : order.getPayAmount());
+        if (rebate > 0) {
+            pointsService.changePoints(userId, rebate, PointsTypeConstant.ACTIVITY,
+                    "REBATE:" + order.getOrderNo(), order.getOrderNo(),
+                    "消费返积分(实付¥" + String.format("%.2f", (order.getPayAmount() == null ? 0 : order.getPayAmount()) / 100.0) + ")");
+        }
+
+        // 6. 支付成功站内通知(2.12): 事务提交后再发, 避免回滚产生幽灵通知
+        Long nUserId = userId;
+        String nOrderNo = order.getOrderNo();
+        Long nOrderId = order.getId();
+        Integer nAmount = order.getPayAmount();
+        int nRebate = rebate;
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    sendOrderNotice(nUserId, "支付成功", "订单 " + nOrderNo + " 支付成功, 实付 ¥"
+                            + String.format("%.2f", (nAmount == null ? 0 : nAmount) / 100.0)
+                            + (nRebate > 0 ? ", 已返 " + nRebate + " 积分" : "")
+                            + ", 等待商家发货", nOrderId, "/orders");
+                }
+            });
+        }
+    }
+
+    /**
+     * 订单类站内通知统一投递(MQ异步, sendQuiet不阻断主流程)
+     */
+    private void sendOrderNotice(Long userId, String title, String content, Long orderId, String url) {
+        mqProducer.sendQuiet(MqConstant.NOTICE_EXCHANGE, MqConstant.NOTICE_ROUTING_KEY,
+                MqNoticeMessage.builder()
+                        .msgId(UUID.randomUUID().toString())
+                        .userId(userId)
+                        .type(NoticeTypeConstant.ORDER)
+                        .title(title)
+                        .content(content)
+                        .bizId(orderId)
+                        .url(url)
+                        .build());
     }
 
     @Override
@@ -633,6 +774,165 @@ public class OrderServiceImpl extends ServiceImpl<LifeOrderMapper, LifeOrder> im
         return baseMapper.update(null, wrapper);
     }
 
+    /**
+     * 2.5 管理端退款(实物单): 退款单 uk_biz_order_no 一单一退 + 订单 CAS 置5 双闸防重复;
+     * 余额/积分原路退回(积分走 changePoints bizNo=RF:{orderNo} 幂等) + 库存回退(DB+Redis镜像);
+     * 权益兑换单不走本口(券已发放, 按张作废退积分见 LifeUserBenefitService.voidUserBenefit)
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void refundOrder(Long id, String reason) {
+        LifeOrder order = getById(id);
+        if (order == null) {
+            throw new ValidationException("订单不存在");
+        }
+        if (order.getOrderType() != null && order.getOrderType() == 2) {
+            throw new ValidationException("权益兑换单请走管理端权益作废流程(按张退积分)");
+        }
+        Integer st = order.getStatus();
+        if (st == null || (st != 1 && st != 2)) {
+            throw new ValidationException("仅已支付或已发货的订单可退款");
+        }
+
+        // 1. 退款单落库: 唯一键 uk_biz_order_no 拦截二次退款; 余额渠道同步退成 status=2
+        LifeRefundOrder refund = LifeRefundOrder.builder()
+                .bizOrderNo(order.getOrderNo())
+                .refundNo("RF" + order.getOrderNo())
+                .refundAmount(order.getPayAmount() == null ? 0 : order.getPayAmount())
+                .status(2)
+                .channelCode(order.getPayChannel() == null ? PayConstant.CHANNEL_BALANCE : order.getPayChannel())
+                .reason(reason)
+                .refundTime(LocalDateTime.now())
+                .tradeNo("MOCKRF" + System.currentTimeMillis())
+                .build();
+        try {
+            refundOrderMapper.insert(refund);
+        } catch (DuplicateKeyException e) {
+            throw new ValidationException("该订单已存在退款记录, 请勿重复操作");
+        }
+
+        // 2. 订单 CAS 置5: 与发货/确认收货/重复退款并发时只有一方成功, 失败即整体回滚(退款单一并撤销)
+        int upd = baseMapper.update(null, new LambdaUpdateWrapper<LifeOrder>()
+                .eq(LifeOrder::getId, id)
+                .in(LifeOrder::getStatus, 1, 2)
+                .set(LifeOrder::getStatus, 5)
+                .set(LifeOrder::getUpdateTime, LocalDateTime.now()));
+        if (upd == 0) {
+            throw new ValidationException("订单状态已变化, 退款失败");
+        }
+
+        // 3. 余额原路退回(实付>0才退) + REFUND 流水
+        if (order.getPayAmount() != null && order.getPayAmount() > 0) {
+            userMapper.addMoney(order.getUserId(), order.getPayAmount());
+            balanceRecordMapper.insert(LifeBalanceRecord.builder()
+                    .userId(order.getUserId())
+                    .amount(order.getPayAmount())
+                    .type(BalanceTypeConstant.REFUND)
+                    .orderNo(order.getOrderNo())
+                    .remark("管理端退款: " + order.getOrderNo())
+                    .build());
+        }
+
+        // 4. 积分原路退回(抵扣部分; bizNo=RF:{orderNo} 与取消退回 OCRF: 前缀隔离, 双路径幂等)
+        if (order.getPointsUsed() != null && order.getPointsUsed() > 0) {
+            pointsService.changePoints(order.getUserId(), order.getPointsUsed(), PointsTypeConstant.REFUND,
+                    "RF:" + order.getOrderNo(), order.getOrderNo(), "管理端退款退回积分");
+        }
+
+        // 4.1 消费返积分冲回(2026-11-12): 同公式计算冲回额; 取 min(返额, 当前余额) 防余额不足卡退款,
+        //     差额豁免(口径同过期回收); bizNo=REBATEC:{orderNo} 与发放 REBATE: 前缀隔离幂等
+        int rebate = pointsService.computeConsumeRebate(order.getPayAmount() == null ? 0 : order.getPayAmount());
+        if (rebate > 0) {
+            LifeUser ru = userMapper.selectById(order.getUserId());
+            int balance = ru == null || ru.getPoints() == null ? 0 : ru.getPoints();
+            int claw = Math.min(rebate, balance);
+            if (claw > 0) {
+                pointsService.changePoints(order.getUserId(), -claw, PointsTypeConstant.ACTIVITY,
+                        "REBATEC:" + order.getOrderNo(), order.getOrderNo(), "订单退款冲回消费返积分");
+            }
+        }
+
+        // 5. 库存回退(DB权威 + Redis镜像同步回补)
+        List<LifeOrderDetail> details = orderDetailMapper.selectList(new LambdaQueryWrapper<LifeOrderDetail>()
+                .eq(LifeOrderDetail::getOrderId, id));
+        for (LifeOrderDetail detail : details) {
+            productMapper.backStock(detail.getItemId(), detail.getQuantity());
+            stockCacheService.rollback(StockCacheService.TYPE_PRODUCT, detail.getItemId(), detail.getQuantity());
+        }
+
+        // 6. 退款成功通知(事务提交后发)
+        Long nUserId = order.getUserId();
+        String nOrderNo = order.getOrderNo();
+        Integer nAmount = refund.getRefundAmount();
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    sendOrderNotice(nUserId, "退款成功", "订单 " + nOrderNo + " 已退款 ¥"
+                            + String.format("%.2f", (nAmount == null ? 0 : nAmount) / 100.0)
+                            + ", 积分已原路退回", order.getId(), "/orders");
+                }
+            });
+        }
+        log.info("管理端退款完成 orderId={} orderNo={} amount={} reason={}", id, order.getOrderNo(),
+                refund.getRefundAmount(), reason);
+    }
+
+    /**
+     * 2.5/2.12 超时关单幂等入口: CAS status 0→4, 已支付/已取消/已关闭自然0行跳过;
+     * 延迟消息消费、扫描兜底任务、(未来)人工关单三方共用, 资源回滚与状态流转同事务
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean closeOrderIfPending(Long orderId) {
+        if (orderId == null) {
+            return false;
+        }
+        int upd = baseMapper.update(null, new LambdaUpdateWrapper<LifeOrder>()
+                .eq(LifeOrder::getId, orderId)
+                .eq(LifeOrder::getStatus, 0)
+                .set(LifeOrder::getStatus, 4)
+                .set(LifeOrder::getUpdateTime, LocalDateTime.now()));
+        if (upd == 0) {
+            return false;
+        }
+        LifeOrder order = getById(orderId);
+        if (order != null) {
+            rollbackOrderResources(order);
+            log.info("超时关单 orderId={} orderNo={}", orderId, order.getOrderNo());
+        }
+        return true;
+    }
+
+    /**
+     * 2.5 扫描兜底关单(定时任务入口): 延迟消息丢失/broker宕机期间的超时单由此收敛;
+     * 单批200防长事务, 单单独立小事务互不影响
+     */
+    @Override
+    public int closeTimeoutOrders() {
+        LocalDateTime deadline = LocalDateTime.now().minusMinutes(autoCloseMinutes);
+        List<LifeOrder> pending = baseMapper.selectList(new LambdaQueryWrapper<LifeOrder>()
+                .eq(LifeOrder::getStatus, 0)
+                .eq(LifeOrder::getOrderType, 1)
+                .lt(LifeOrder::getCreateTime, deadline)
+                .last("LIMIT 200"));
+        int closed = 0;
+        for (LifeOrder o : pending) {
+            try {
+                Boolean done = transactionTemplate.execute(s -> closeOrderIfPending(o.getId()));
+                if (Boolean.TRUE.equals(done)) {
+                    closed++;
+                }
+            } catch (Exception e) {
+                log.warn("超时关单失败 orderId={} (下轮重试)", o.getId(), e);
+            }
+        }
+        if (closed > 0) {
+            log.info("超时关单兜底扫描: 本轮关闭 {} 单", closed);
+        }
+        return closed;
+    }
+
     private String generateOrderNumber() {
         String code = "LP";
         // 时间戳
@@ -650,5 +950,33 @@ public class OrderServiceImpl extends ServiceImpl<LifeOrderMapper, LifeOrder> im
         String incrStr = String.format("%06d", incr);
 
         return code + time + incrStr;
+    }
+
+    /**
+     * 2.14 Redis+Lua 库存预扣: SOLD_OUT 快速失败(不打DB); MISS(未预热)按需预热后重试一次;
+     * 扣成功的条目记入补偿列表(事务回滚时逆序回补); 不限量(库存-1/null)不建镜像恒走DB路径
+     */
+    private void preDeductRedisStock(String itemType, Long itemId, int qty, List<String[]> compensation) {
+        long r = stockCacheService.tryDeduct(itemType, itemId, qty);
+        if (r == StockCacheService.MISS && stockProperties.isPreheatOnDemand()) {
+            Integer dbStock = null;
+            if (StockCacheService.TYPE_PRODUCT.equals(itemType)) {
+                LifeProduct p = productMapper.selectById(itemId);
+                dbStock = p == null ? null : p.getStock();
+            } else {
+                LifeBenefit b = benefitMapper.selectById(itemId);
+                dbStock = b == null ? null : b.getStock();
+            }
+            if (dbStock != null && dbStock >= 0 && stockCacheService.preheat(itemType, itemId, dbStock)) {
+                r = stockCacheService.tryDeduct(itemType, itemId, qty);
+            }
+        }
+        if (r == StockCacheService.SOLD_OUT) {
+            // 镜像判定库存不足: 直接失败不打DB(镜像若漂移偏小, 对账任务10分钟级校正; DB扣减仍是权威)
+            throw new ValidationException("库存不足, 已被抢完");
+        }
+        if (r >= 0) {
+            compensation.add(new String[]{itemType, String.valueOf(itemId), String.valueOf(qty)});
+        }
     }
 }

@@ -45,12 +45,20 @@ logging:
         mapper: debug
         service: info
         controller: info
+  # 4.10 链路追踪: 日志行内嵌 traceId(HTTP过滤器生成/透传, MQ与定时任务见 MqTraceSupport/TaskLockSupport)
+  pattern:
+    level: "%5p [%X{traceId:-}]"
 
 life:
   jwt:
-    user-secret-key: tinkllos
+    # 5.1 密钥外部化: 环境变量优先, 默认值仅供本地开发(生产必须注入 LIFE_JWT_* 并轮换)
+    user-secret-key: ${LIFE_JWT_USER_SECRET:life-social-user-jwt-secret-2026-change-me-please}
     user-ttl: 7200000
     user-token-name: authentication
+    # 2.3 管理端令牌: 与C端密钥分离(互不可用), 默认请求头 admin-authentication
+    admin-secret-key: ${LIFE_JWT_ADMIN_SECRET:life-social-admin-jwt-secret-2026-change-me-please}
+    admin-ttl: 7200000
+    admin-token-name: admin-authentication
   # Python AI Agent 伴生服务（绑定 AgentProperties: prefix=life.agent）
   agent:
     enabled: true
@@ -70,16 +78,73 @@ life:
     type: local
   local-storage:
     base-path: uploads
-  # 积分业务参数(2.5 抵扣 / 1.6 榜单结算): rate=多少积分抵1元; max-ratio=抵扣上限占订单金额百分比;
-  # rank-rewards=月度积分榜前三名奖励(逗号分隔, 按名次取用)
+  # 积分业务参数(2.5 抵扣 / 1.6 榜单结算 / 2.8 过期 / 2026-11-12 发帖奖励与消费返积分):
+  # rate=多少积分抵1元; max-ratio=抵扣上限占订单金额百分比;
+  # rank-rewards=月度积分榜前三名奖励(逗号分隔, 按名次取用);
+  # expire-days=发放积分有效期天数, 0=永久(默认), >0 时正向流水写 expire_time 由 PointsExpireTask 到期回收;
+  # post-reward=发帖奖励积分(MQ异步, bizNo=POST:{id} 幂等), post-reward-daily-limit=每人每日限发篇数(防刷);
+  # rebate=消费力度返积分: 支付成功按 实付元×points-per-yuan + 达档阶梯加赠(tiers "门槛元:加赠分" 累加) 同步入账,
+  #   退款按同公式冲回(min(返额,余额)); 例 实付300元 → 300 + 20 + 50 + 200 = 570 分
   points:
     deduct:
       rate: 100
       max-ratio: 50
     rank-rewards: 100,50,20
+    expire-days: 0
+    post-reward: 10
+    post-reward-daily-limit: 3
+    rebate:
+      enabled: true
+      points-per-yuan: 1
+      tiers: "50:20,100:50,300:200"
+  # 签到分值(2026-11-12 提高): 基础分 + 连签7/14/28天里程碑奖励, 运营可调无需发版
+  sign:
+    base-points: 5
+    reward-7: 30
+    reward-14: 60
+    reward-28: 150
   # 订单: 发货后自动确认收货天数(定时任务 OrderAutoConfirmTask)
   order:
     auto-confirm-days: 7
+    # 2.5 超时未支付自动关单分钟数(延迟消息TTL与扫描兜底共用)
+    auto-close-minutes: 30
+  # 2.10 风控: 滑动窗口限频(次/窗口秒) + 命中标记时长; windows 未配置的动作不限频;
+  # map键用 "[...]" 包裹保留大写动作名(宽松绑定会小写化裸键)
+  risk:
+    enabled: true
+    flag-ttl-minutes: 10
+    windows:
+      "[SIGN]": { seconds: 60, limit: 3 }
+      "[POST]": { seconds: 60, limit: 5 }
+      "[COMMENT]": { seconds: 60, limit: 10 }
+      "[LIKE]": { seconds: 60, limit: 30 }
+      "[VIEW]": { seconds: 60, limit: 60 }
+      "[CLAIM]": { seconds: 60, limit: 10 }
+      "[ORDER]": { seconds: 60, limit: 5 }
+  # 2.10 接口层 Sentinel 单机限流(无dashboard, 规则代码化): key=URL pattern, value=单用户QPS;
+  # 资源总QPS熔断线=单用户阈值×20(见 SentinelRuleConfig);
+  # 注意: map键必须用 "[...]" 包裹, 否则 Spring 宽松绑定会剥掉斜杠导致资源名匹配不上
+  sentinel:
+    enabled: true
+    rules:
+      "[/post/page]": 10
+      "[/post/publish]": 5
+      "[/post/{id}/view]": 20
+      "[/like]": 10
+      "[/order]": 5
+      "[/signRecord]": 3
+  # 2.11 ES 全文检索(应用双写同步, 不用Canal): enabled=false 或连接异常自动降级 SQL LIKE
+  es:
+    enabled: true
+    uri: http://172.27.216.62:9200
+    post-index: life_post
+    timeout-ms: 2000
+  # 2.14 Redis+Lua 库存镜像: Lua预扣挡热点流量, DB条件扣减仍是权威; 对账任务10分钟校正漂移
+  stock:
+    enabled: true
+    preheat-on-demand: true
+    cache-ttl-hours: 72
+    reconcile-interval-minutes: 10
   # 热度推荐信息流(2.11): hot=公式参数(单语句重算, 调参后由扫描任务自然收敛) /
   # feed=多级缓存与阅读回写 / bloom=帖子id布隆过滤器(防穿透)
   post:

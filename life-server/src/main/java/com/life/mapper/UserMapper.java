@@ -41,4 +41,25 @@ public interface UserMapper extends BaseMapper<LifeUser> {
 
     @Update("update life_social.life_user set money = money + #{amount} where id = #{userId}")
     int addMoney(Long userId, Integer amount);
+
+    /**
+     * 冻结积分(2.8): 可用→冻结 单语句原子转移, 条件 points>=n 同行判定, 0行=可用不足
+     */
+    @Update("update life_social.life_user set points = points - #{points}, frozen_points = frozen_points + #{points} " +
+            "where id = #{userId} and points >= #{points}")
+    int freezePoints(@Param("userId") Long userId, @Param("points") Integer points);
+
+    /**
+     * 冻结转扣减(支付/发放成功): frozen_points>=n 条件防负
+     */
+    @Update("update life_social.life_user set frozen_points = frozen_points - #{points} " +
+            "where id = #{userId} and frozen_points >= #{points}")
+    int settleFrozen(@Param("userId") Long userId, @Param("points") Integer points);
+
+    /**
+     * 解冻回可用(取消/关单): frozen_points>=n 条件防负
+     */
+    @Update("update life_social.life_user set frozen_points = frozen_points - #{points}, points = points + #{points} " +
+            "where id = #{userId} and frozen_points >= #{points}")
+    int unfreezePoints(@Param("userId") Long userId, @Param("points") Integer points);
 }

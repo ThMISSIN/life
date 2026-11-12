@@ -52,4 +52,26 @@ public interface LifePointsRecordMapper extends BaseMapper<LifePointsRecord> {
     Integer selectMyMonthRank(@Param("userId") Long userId,
                               @Param("start") LocalDateTime start,
                               @Param("end") LocalDateTime end);
+
+    /**
+     * 对账(4.9): 某用户已结算流水净额(应等于 life_user.points 余额);
+     * 冻结中(FROZEN)不计入余额口径; 过期回收以独立 SETTLED 负向流水记账,
+     * 发放行状态不变, 台账与余额天然自洽
+     */
+    @Select("select ifnull(sum(points), 0) from life_points_record " +
+            "where user_id = #{userId} and deleted = 0 and status = 1")
+    Long sumSettledPoints(@Param("userId") Long userId);
+
+    /**
+     * 过期回收候选(2.8): 正向、已结算、expire_time 已到的发放流水, 且尚无 EXPIRE:{id} 回收流水;
+     * 台账口径: 发放行保持 SETTLED 不改状态, 回收以独立负向流水(type=EXPIRE, biz_no=EXPIRE:{发放行id})
+     * 记账 min(发放额, 当前余额), NOT EXISTS + uk_biz_no 双重防重复回收
+     */
+    @Select("select r.* from life_points_record r " +
+            "where r.deleted = 0 and r.status = 1 and r.points > 0 " +
+            "  and r.expire_time is not null and r.expire_time < #{now} " +
+            "  and not exists (select 1 from life_points_record x " +
+            "                  where x.biz_no = concat('EXPIRE:', r.id) and x.deleted = 0) " +
+            "order by r.expire_time asc limit #{limit}")
+    List<LifePointsRecord> selectExpiredCandidates(@Param("now") LocalDateTime now, @Param("limit") int limit);
 }
