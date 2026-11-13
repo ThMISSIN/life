@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.life.mapper.LifeBalanceRecordMapper">
+
+    <resultMap type="LifeBalanceRecord" id="LifeBalanceRecordResult">
+        <id     property="id"         column="id"/>
+        <result property="userId"     column="user_id"/>
+        <result property="nickname"   column="nickname"/>
+        <result property="amount"     column="amount"/>
+        <result property="type"       column="type"/>
+        <result property="orderNo"    column="order_no"/>
+        <result property="remark"     column="remark"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="creater"    column="creater"/>
+        <result property="updater"    column="updater"/>
+        <result property="deleted"    column="deleted"/>
+    </resultMap>
+
+    <!-- 管理端分页: 按用户/类型/时间区间筛选, 时间降序(口径对齐C端 queryAdminPage) -->
+    <select id="selectLifeBalanceRecordList" parameterType="com.ruoyi.life.domain.query.LifeRecordQuery" resultMap="LifeBalanceRecordResult">
+        select br.id, br.user_id, br.amount, br.type, br.order_no, br.remark,
+               br.create_time, br.update_time, br.creater, br.updater, br.deleted,
+               coalesce(nullif(u.nickname, ''), u.username) as nickname
+        from life_balance_record br
+        left join life_user u on u.id = br.user_id and u.deleted = 0
+        where br.deleted = 0
+        <if test="userId != null">
+            and br.user_id = #{userId}
+        </if>
+        <if test="type != null">
+            and br.type = #{type}
+        </if>
+        <if test="startTime != null and startTime != ''">
+            and br.create_time &gt;= #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            and br.create_time &lt;= #{endTime}
+        </if>
+        order by br.create_time desc, br.id desc
+    </select>
+
+</mapper>

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.life.mapper.LifeUserMapper">
+
+    <resultMap type="LifeUser" id="LifeUserResult">
+        <id     property="id"            column="id"/>
+        <result property="username"      column="username"/>
+        <result property="phone"         column="phone"/>
+        <result property="password"      column="password"/>
+        <result property="nickname"      column="nickname"/>
+        <result property="avatar"        column="avatar"/>
+        <result property="email"         column="email"/>
+        <result property="userType"      column="user_type"/>
+        <result property="points"        column="points"/>
+        <result property="money"         column="money"/>
+        <result property="level"         column="level"/>
+        <result property="status"        column="status"/>
+        <result property="lastLoginTime" column="last_login_time"/>
+        <result property="lastLoginIp"   column="last_login_ip"/>
+        <result property="loginCount"    column="login_count"/>
+        <result property="createTime"    column="create_time"/>
+        <result property="updateTime"    column="update_time"/>
+        <result property="creater"       column="creater"/>
+        <result property="updater"       column="updater"/>
+        <result property="deleted"       column="deleted"/>
+    </resultMap>
+
+    <select id="selectLifeUserByIds" resultMap="LifeUserResult">
+        select id, username, nickname, points, money, level, status
+        from life_user
+        where deleted = 0 and id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
+    <select id="selectLifeUserById" parameterType="Long" resultMap="LifeUserResult">
+        select id, username, nickname, points, money, level, status
+        from life_user
+        where deleted = 0 and id = #{id}
+    </select>
+
+    <!-- 原子加积分, 口径与C端 UserMapper.addPoints 完全一致 -->
+    <update id="addPoints">
+        update life_user set points = points + #{points} where id = #{userId}
+    </update>
+
+</mapper>

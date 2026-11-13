@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.life.mapper.LifeBenefitMapper">
+
+    <resultMap type="LifeBenefit" id="LifeBenefitResult">
+        <id     property="id"            column="id"/>
+        <result property="name"          column="name"/>
+        <result property="categoryId"    column="category_id"/>
+        <result property="categoryName"  column="category_name"/>
+        <result property="description"   column="description"/>
+        <result property="coverImage"    column="cover_image"/>
+        <result property="images"        column="images"/>
+        <result property="benefitType"   column="benefit_type"/>
+        <result property="pointsPrice"   column="points_price"/>
+        <result property="originalPrice" column="original_price"/>
+        <result property="validType"     column="valid_type"/>
+        <result property="validDays"     column="valid_days"/>
+        <result property="fixedEndTime"  column="fixed_end_time"/>
+        <result property="perUserLimit"  column="per_user_limit"/>
+        <result property="minLevel"      column="min_level"/>
+        <result property="stock"         column="stock"/>
+        <result property="sales"         column="sales"/>
+        <result property="status"        column="status"/>
+        <result property="sort"          column="sort"/>
+        <result property="createTime"    column="create_time"/>
+        <result property="updateTime"    column="update_time"/>
+        <result property="creater"       column="creater"/>
+        <result property="updater"       column="updater"/>
+        <result property="deleted"       column="deleted"/>
+    </resultMap>
+
+    <sql id="selectBenefitVo">
+        select b.id, b.name, b.category_id, b.description, b.cover_image, b.images, b.benefit_type,
+               b.points_price, b.original_price, b.valid_type, b.valid_days, b.fixed_end_time,
+               b.per_user_limit, b.min_level, b.stock, b.sales, b.status, b.sort,
+               b.create_time, b.update_time, b.creater, b.updater, b.deleted,
+               c.name as category_name
+        from life_benefit b
+        left join life_benefit_category c on c.id = b.category_id and c.deleted = 0
+    </sql>
+
+    <!-- 管理端分页: status不传查全部(含下架); 排序口径与C端 LifeBenefitMapper.queryList 一致 -->
+    <select id="selectLifeBenefitList" parameterType="com.ruoyi.life.domain.query.LifeBenefitQuery" resultMap="LifeBenefitResult">
+        <include refid="selectBenefitVo"/>
+        where b.deleted = 0
+        <if test="status != null">
+            and b.status = #{status}
+        </if>
+        <if test="benefitType != null">
+            and b.benefit_type = #{benefitType}
+        </if>
+        <if test="categoryId != null">
+            and b.category_id = #{categoryId}
+        </if>
+        <if test="keyword != null and keyword != ''">
+            and b.name like concat('%', #{keyword}, '%')
+        </if>
+        <choose>
+            <when test="sortType != null and sortType == 2">
+                order by b.sales desc, b.id desc
+            </when>
+            <when test="sortType != null and sortType == 3">
+                order by b.points_price asc, b.id desc
+            </when>
+            <when test="sortType != null and sortType == 4">
+                order by b.points_price desc, b.id desc
+            </when>
+            <otherwise>
+                order by b.sort asc, b.id desc
+            </otherwise>
+        </choose>
+    </select>
+
+    <select id="selectLifeBenefitById" parameterType="Long" resultMap="LifeBenefitResult">
+        <include refid="selectBenefitVo"/>
+        where b.deleted = 0 and b.id = #{id}
+    </select>
+
+    <select id="countByCategoryId" parameterType="Long" resultType="int">
+        select count(*) from life_benefit where deleted = 0 and category_id = #{categoryId}
+    </select>
+
+    <insert id="insertLifeBenefit" parameterType="LifeBenefit" useGeneratedKeys="true" keyProperty="id">
+        insert into life_benefit
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="name != null">name,</if>
+            <if test="categoryId != null">category_id,</if>
+            <if test="description != null">description,</if>
+            <if test="coverImage != null">cover_image,</if>
+            <if test="images != null">images,</if>
+            <if test="benefitType != null">benefit_type,</if>
+            <if test="pointsPrice != null">points_price,</if>
+            <if test="originalPrice != null">original_price,</if>
+            <if test="validType != null">valid_type,</if>
+            <if test="validDays != null">valid_days,</if>
+            <if test="fixedEndTime != null">fixed_end_time,</if>
+            <if test="perUserLimit != null">per_user_limit,</if>
+            <if test="minLevel != null">min_level,</if>
+            <if test="stock != null">stock,</if>
+            <if test="sales != null">sales,</if>
+            <if test="status != null">status,</if>
+            <if test="sort != null">sort,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="creater != null">creater,</if>
+            <if test="updater != null">updater,</if>
+            <if test="deleted != null">deleted,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="name != null">#{name},</if>
+            <if test="categoryId != null">#{categoryId},</if>
+            <if test="description != null">#{description},</if>
+            <if test="coverImage != null">#{coverImage},</if>
+            <if test="images != null">#{images},</if>
+            <if test="benefitType != null">#{benefitType},</if>
+            <if test="pointsPrice != null">#{pointsPrice},</if>
+            <if test="originalPrice != null">#{originalPrice},</if>
+            <if test="validType != null">#{validType},</if>
+            <if test="validDays != null">#{validDays},</if>
+            <if test="fixedEndTime != null">#{fixedEndTime},</if>
+            <if test="perUserLimit != null">#{perUserLimit},</if>
+            <if test="minLevel != null">#{minLevel},</if>
+            <if test="stock != null">#{stock},</if>
+            <if test="sales != null">#{sales},</if>
+            <if test="status != null">#{status},</if>
+            <if test="sort != null">#{sort},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="creater != null">#{creater},</if>
+            <if test="updater != null">#{updater},</if>
+            <if test="deleted != null">#{deleted},</if>
+        </trim>
+    </insert>
+
+    <update id="updateLifeBenefit" parameterType="LifeBenefit">
+        update life_benefit
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="name != null">name = #{name},</if>
+            <if test="categoryId != null">category_id = #{categoryId},</if>
+            <if test="description != null">description = #{description},</if>
+            <if test="coverImage != null">cover_image = #{coverImage},</if>
+            <if test="images != null">images = #{images},</if>
+            <if test="benefitType != null">benefit_type = #{benefitType},</if>
+            <if test="pointsPrice != null">points_price = #{pointsPrice},</if>
+            <if test="originalPrice != null">original_price = #{originalPrice},</if>
+            <if test="validType != null">valid_type = #{validType},</if>
+            <if test="validDays != null">valid_days = #{validDays},</if>
+            <if test="fixedEndTime != null">fixed_end_time = #{fixedEndTime},</if>
+            <if test="perUserLimit != null">per_user_limit = #{perUserLimit},</if>
+            <if test="minLevel != null">min_level = #{minLevel},</if>
+            <if test="stock != null">stock = #{stock},</if>
+            <if test="sales != null">sales = #{sales},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="sort != null">sort = #{sort},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="updater != null">updater = #{updater},</if>
+        </trim>
+        where id = #{id} and deleted = 0
+    </update>
+
+    <update id="deleteLifeBenefitById" parameterType="Long">
+        update life_benefit set deleted = 1 where id = #{id}
+    </update>
+
+    <!-- 回库存+减销量, 口径与C端 LifeBenefitMapper.backStock 完全一致 -->
+    <update id="backStock">
+        update life_benefit set stock = stock + #{quantity}, sales = greatest(sales - #{quantity}, 0)
+        where id = #{id}
+    </update>
+
+</mapper>

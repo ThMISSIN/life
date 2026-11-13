@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+
+<html lang="zh" style=""><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>积分商城 - 全生命福利社交</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                "background": "#faf8ff",
+                "on-surface-variant": "#424656",
+                "on-secondary-container": "#572000",
+                "on-error-container": "#93000a",
+                "secondary-fixed": "#ffdbcc",
+                "surface-container-lowest": "#ffffff",
+                "secondary-fixed-dim": "#ffb693",
+                "secondary": "#a04100",
+                "on-primary-fixed-variant": "#003ea8",
+                "on-tertiary": "#ffffff",
+                "on-surface": "#191b24",
+                "inverse-primary": "#b4c5ff",
+                "inverse-surface": "#2e303a",
+                "primary-fixed": "#dbe1ff",
+                "surface-dim": "#d8d9e6",
+                "on-background": "#191b24",
+                "on-secondary-fixed-variant": "#7a3000",
+                "on-primary-container": "#f3f3ff",
+                "on-tertiary-fixed": "#002108",
+                "surface-bright": "#faf8ff",
+                "surface-container-low": "#f2f3ff",
+                "on-error": "#ffffff",
+                "surface-tint": "#0053da",
+                "tertiary-container": "#008133",
+                "error": "#ba1a1a",
+                "surface-variant": "#e1e2ee",
+                "tertiary": "#006526",
+                "surface": "#faf8ff",
+                "on-secondary": "#ffffff",
+                "on-tertiary-fixed-variant": "#00531e",
+                "surface-container-high": "#e7e7f4",
+                "tertiary-fixed": "#69ff87",
+                "on-tertiary-container": "#d4ffd2",
+                "inverse-on-surface": "#eff0fd",
+                "surface-container": "#ecedfa",
+                "on-secondary-fixed": "#351000",
+                "error-container": "#ffdad6",
+                "primary": "#004cca",
+                "on-primary": "#ffffff",
+                "tertiary-fixed-dim": "#3ce36a",
+                "secondary-container": "#fe6b00",
+                "on-primary-fixed": "#00174b",
+                "surface-container-highest": "#e1e2ee",
+                "primary-fixed-dim": "#b4c5ff",
+                "outline-variant": "#c2c6d9",
+                "outline": "#737687",
+                "primary-container": "#0062ff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "lg": "24px",
+                      "xl": "32px",
+                      "xs": "8px",
+                      "sm": "12px",
+                      "margin-desktop": "40px",
+                      "margin-mobile": "16px",
+                      "md": "16px",
+                      "base": "4px",
+                      "gutter": "16px"
+              },
+              "fontFamily": {
+                      "label-md": ["Inter", "sans-serif"],
+                      "display-sm": ["Inter", "sans-serif"],
+                      "headline-sm": ["Inter", "sans-serif"],
+                      "headline-lg-mobile": ["Inter", "sans-serif"],
+                      "body-lg": ["Inter", "sans-serif"],
+                      "body-md": ["Inter", "sans-serif"],
+                      "display-lg": ["Inter", "sans-serif"],
+                      "headline-lg": ["Inter", "sans-serif"]
+              },
+              "fontSize": {
+                      "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500"}],
+                      "display-sm": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "headline-lg-mobile": ["22px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "display-lg": ["40px", {"lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "headline-lg": ["24px", {"lineHeight": "32px", "fontWeight": "600"}]
+              }
+            },
+          },
+        }
+    </script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .filled-icon {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .icon-fill {
+           font-variation-settings: 'FILL' 1;
+        }
+        body { font-family: 'Inter', sans-serif; background-color: #f8f9fa; }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen">
+<div class="max-w-7xl mx-auto flex justify-center w-full">
+<!-- Left Sidebar -->
+<header class="w-[88px] xl:w-[275px] shrink-0 flex flex-col justify-between h-screen sticky top-0 px-2 xl:px-4 py-2 border-r border-outline-variant hidden sm:flex">
+<div class="flex flex-col gap-1 xl:items-start items-center">
+<!-- Brand Logo -->
+<a class="p-3 w-12 h-12 rounded-full hover:bg-surface-container-low transition-colors flex items-center justify-center mb-2 xl:ml-2" href="#">
+<span class="material-symbols-outlined text-display-sm text-on-surface" data-icon="all_inclusive" style="font-variation-settings: 'FILL' 1;">all_inclusive</span>
+</a>
+<!-- Nav Links -->
+<nav class="flex flex-col gap-1 w-full xl:items-start items-center"><a class="x-nav-item flex items-center gap-5 px-3 xl:px-4 py-3 rounded-full transition-colors w-max" href="#"><span class="material-symbols-outlined text-[26px]" style="font-variation-settings: 'FILL' 1;">home</span><span class="text-headline-sm hidden xl:inline">首页</span></a><a class="x-nav-item flex items-center gap-5 px-3 xl:px-4 py-3 rounded-full transition-colors w-max bg-surface-container-low" href="#"><span class="material-symbols-outlined text-[26px]" style="font-variation-settings: 'FILL' 1;">shopping_bag</span><span class="text-headline-sm hidden xl:inline font-bold">积分商城</span></a><a class="x-nav-item flex items-center gap-5 px-3 xl:px-4 py-3 rounded-full transition-colors w-max" href="#"><span class="material-symbols-outlined text-[26px]">person</span><span class="text-headline-sm hidden xl:inline font-normal">个人中心</span></a><a class="x-nav-item flex items-center gap-5 px-3 xl:px-4 py-3 rounded-full transition-colors w-max" href="#"><span class="material-symbols-outlined text-[26px]">more_horiz</span><span class="text-headline-sm hidden xl:inline font-normal">更多</span></a></nav>
+<!-- Post Button -->
+<button class="bg-primary text-on-primary font-bold text-[17px] w-12 h-12 xl:w-11/12 xl:h-14 rounded-full mt-4 hover:bg-primary/90 transition-colors shadow-sm flex items-center justify-center">
+<span class="material-symbols-outlined xl:hidden" style="font-variation-settings: 'FILL' 1;">add</span>
+<span class="hidden xl:inline">发布</span>
+</button>
+</div>
+<!-- User Profile -->
+<button class="flex items-center justify-between p-3 rounded-full hover:bg-surface-container-low transition-colors w-full mt-auto mb-3 xl:mb-4">
+<div class="flex items-center gap-3">
+<img class="w-10 h-10 rounded-full object-cover shrink-0" data-alt="User Avatar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB80oVETeqnoBqMjlBml23PNriPSgF3zAwE_iCOkB2m2g3WxCkjnMhPEPCGhvFUOK3gwmblVfT_yr-Wg0hdmBApI86Vts5cqpjDoHr049GkfsZdEgzEHdod5j3jyy3RzENO67qmG1rhqX28InAAlAQ9wCmpUaReOdoTHmkfAq6n5G-nAgRaqWDjtgOUCJ2ui7DekffUgNzI7ll352NI3yNkxNgxxxao1cXKwL3BVBa_93vH_j_girHqCA"/>
+<div class="flex-col hidden xl:flex text-left">
+<span class="font-bold text-body-md leading-tight text-on-surface">5级 Pro</span>
+<span class="text-[15px] text-on-surface-variant leading-tight">@level5pro</span>
+</div>
+</div>
+<span class="material-symbols-outlined hidden xl:block text-on-surface">more_horiz</span>
+</button>
+</header>
+<!-- Main Content Area -->
+<div class="flex-grow w-full border-r border-outline-variant/20 grid grid-cols-1 lg:grid-cols-12 min-h-screen">
+<!-- Center Content (8 cols) -->
+<main class="lg:col-span-8 flex flex-col p-lg border-r border-outline-variant/20 min-h-screen">
+<div class="flex flex-col gap-xl">
+<!-- Hero Banner -->
+<section class="relative rounded-xl overflow-hidden min-h-[300px] flex items-center bg-surface-container-low border border-outline-variant/20">
+<div class="absolute inset-0 bg-cover bg-center opacity-40" data-alt="A modern lifestyle composition showing premium rewards, luxury travel items, and a smartphone displaying a digital loyalty card. Bright, clean lighting, corporate modern aesthetic with vibrant blue accents. Professional studio photography style." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBxqBQ5HbN0fRKNpWhequ-Jd166DwxkAr10xLZv2SO-OhDT_m7ZQrsazCyZ2OceeT1ntXhc9zoJTgMt4xyQYl2NrBXiM5C-43dNJumOQhRqAtAqlpg07eVcjZJJcAmfoL3wsFTIHt6YECCVFm2nxB7J-PAWUtJaaEF9LbooXhKjeTPcv5wU7sfkGGuXcK3OweynnOxH0xt9RswSIK4WUm9YJPTOIEL0dKr3FTRZNiHeqbYumBf3XmkAog')"></div>
+<div class="relative z-10 p-xl max-w-2xl">
+<span class="inline-block px-sm py-base bg-tertiary-container/10 text-tertiary-container rounded-full font-label-md text-label-md mb-md font-bold">VIP 专享</span>
+<h1 class="font-display-lg text-display-lg text-on-surface mb-sm">会员专属权益</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant mb-lg">解锁为您量身定制的优质生活奖励与精选体验。</p>
+<button class="bg-primary text-on-primary px-lg py-sm rounded-lg font-label-md text-label-md hover:bg-primary/90 transition-all active:scale-[0.98]">
+                        探索所有权益
+                    </button>
+</div>
+</section>
+<!-- Popular Coupons (领券中心) -->
+<section>
+<div class="flex justify-between items-end mb-lg">
+<h2 class="font-headline-sm text-headline-sm text-on-surface">热门优惠券 (领券中心)</h2>
+<a class="text-primary font-label-md text-label-md hover:underline" href="#">查看全部</a>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-md">
+<!-- Coupon Card 1 -->
+<div class="bg-surface-container-lowest rounded-xl p-md flex flex-col relative overflow-hidden group border border-outline-variant/20 hover:border-primary/50 transition-all transform hover:-translate-y-1">
+<div class="absolute -right-4 -top-4 w-24 h-24 bg-secondary-container/10 rounded-full blur-xl group-hover:bg-secondary-container/20 transition-colors"></div>
+<div class="flex items-start justify-between mb-md relative z-10">
+<div class="p-sm bg-surface-container-low rounded-lg text-primary">
+<span class="material-symbols-outlined icon-fill" data-icon="restaurant">restaurant</span>
+</div>
+<span class="font-headline-sm text-headline-sm text-secondary-container">¥50 Off</span>
+</div>
+<h3 class="font-label-md text-label-md font-bold text-on-surface mb-xs relative z-10">Premium Dining Voucher</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mb-md flex-grow relative z-10">全市合作餐厅通用</p>
+<!-- Punched hole visual metaphor -->
+<div class="border-t border-dashed border-outline-variant/50 pt-md mt-auto relative z-10 flex justify-between items-center">
+<div class="absolute -left-6 top-0 w-4 h-4 bg-background rounded-full -translate-y-1/2 border-r border-outline-variant/20"></div>
+<div class="absolute -right-6 top-0 w-4 h-4 bg-background rounded-full -translate-y-1/2 border-l border-outline-variant/20"></div>
+<span class="font-label-md text-label-md text-outline">2天后结束</span>
+<button class="bg-secondary-container text-on-secondary px-md py-xs rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity">领取</button>
+</div>
+</div>
+<!-- Coupon Card 2 -->
+<div class="bg-surface-container-lowest rounded-xl p-md flex flex-col relative overflow-hidden group border border-outline-variant/20 hover:border-primary/50 transition-all transform hover:-translate-y-1">
+<div class="absolute -right-4 -top-4 w-24 h-24 bg-primary/10 rounded-full blur-xl group-hover:bg-primary/20 transition-colors"></div>
+<div class="flex items-start justify-between mb-md relative z-10">
+<div class="p-sm bg-surface-container-low rounded-lg text-primary">
+<span class="material-symbols-outlined icon-fill" data-icon="shopping_bag">shopping_bag</span>
+</div>
+<span class="font-headline-sm text-headline-sm text-primary">20% Off</span>
+</div>
+<h3 class="font-label-md text-label-md font-bold text-on-surface mb-xs relative z-10">Fashion Retailer</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mb-md flex-grow relative z-10">适用于新品系列</p>
+<div class="border-t border-dashed border-outline-variant/50 pt-md mt-auto relative z-10 flex justify-between items-center">
+<div class="absolute -left-6 top-0 w-4 h-4 bg-background rounded-full -translate-y-1/2 border-r border-outline-variant/20"></div>
+<div class="absolute -right-6 top-0 w-4 h-4 bg-background rounded-full -translate-y-1/2 border-l border-outline-variant/20"></div>
+<span class="font-label-md text-label-md text-outline">5天后结束</span>
+<button class="bg-secondary-container text-on-secondary px-md py-xs rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity">领取</button>
+</div>
+</div>
+<!-- Coupon Card 3 -->
+<div class="bg-surface-container-lowest rounded-xl p-md flex flex-col relative overflow-hidden group border border-outline-variant/20 hover:border-primary/50 transition-all transform hover:-translate-y-1">
+<div class="absolute -right-4 -top-4 w-24 h-24 bg-tertiary-container/10 rounded-full blur-xl group-hover:bg-tertiary-container/20 transition-colors"></div>
+<div class="flex items-start justify-between mb-md relative z-10">
+<div class="p-sm bg-surface-container-low rounded-lg text-primary">
+<span class="material-symbols-outlined icon-fill" data-icon="flight">flight</span>
+</div>
+<span class="font-headline-sm text-headline-sm text-tertiary-container">Free</span>
+</div>
+<h3 class="font-label-md text-label-md font-bold text-on-surface mb-xs relative z-10">Airport Lounge Access</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mb-md flex-grow relative z-10">专业会员单次入场</p>
+<div class="border-t border-dashed border-outline-variant/50 pt-md mt-auto relative z-10 flex justify-between items-center">
+<div class="absolute -left-6 top-0 w-4 h-4 bg-background rounded-full -translate-y-1/2 border-r border-outline-variant/20"></div>
+<div class="absolute -right-6 top-0 w-4 h-4 bg-background rounded-full -translate-y-1/2 border-l border-outline-variant/20"></div>
+<span class="font-label-md text-label-md text-outline">长期有效</span>
+<button class="bg-secondary-container text-on-secondary px-md py-xs rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity">领取</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Points Mall (积分商城) -->
+<section>
+<div class="flex justify-between items-end mb-lg">
+<h2 class="font-headline-sm text-headline-sm text-on-surface">积分商城 (Points Mall)</h2>
+</div>
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-md">
+<!-- Item 1 -->
+<div class="bg-surface-container-lowest rounded-xl overflow-hidden border border-outline-variant/20 hover:border-primary/50 transition-all group cursor-pointer flex flex-col">
+<div class="h-32 w-full bg-surface-container-low relative overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A sleek, modern smart coffee mug sitting on a minimal wooden desk next to a laptop. Natural window lighting, soft shadows, high-end product photography style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDhErfF60yExS5DLwuhUmvBb5vwkBYy9nFt0g_m85AgK27efu3XbIKxOIGocCEjmlv8NCwtnblI7k8xHz8kgr7XfMjzCcS_X56Z8e4FqR4opK9ISSIThz0E1wfiy-zWiG_mSyMB3Fgtkqse_5OaW9Q1rod5jzl8jQXTTTqrf-a-QR8sO5o3p0Loiadc_Bc-qcG8fWYve7g5lQghK0kRp6hLcEuIBEvUo7dbYh3Joq2GdOMa8vT9deJXcg"/>
+</div>
+<div class="p-sm flex flex-col flex-grow">
+<h4 class="font-label-md text-label-md font-bold text-on-surface mb-xs truncate">智能恒温杯</h4>
+<div class="mt-auto flex items-center gap-xs">
+<span class="material-symbols-outlined text-primary text-[16px]" data-icon="stars">stars</span>
+<span class="font-label-md text-label-md font-bold text-primary">2,500</span>
+</div>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="bg-surface-container-lowest rounded-xl overflow-hidden border border-outline-variant/20 hover:border-primary/50 transition-all group cursor-pointer flex flex-col">
+<div class="h-32 w-full bg-surface-container-low relative overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="High quality noise cancelling wireless headphones resting on a minimalist white stand. Soft blue lighting accents, clean studio background. Tech luxury aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD9xOb3_eVf21m9eyv4eA5G0U0Z-ogECx6SV4Ao85S045x_7B4efl1eZeOIDVzf1ksMmuH1E22oWR5hDObmwOwsuQOzm_m3qXcwfiwtL9yb-jCJ9wliDkb9OSCUGY0GnXoAgcXAH86bNKj5nVUinYPFApVgpT_yltDp2HVcGa07E0mCiu7XhJyk64k0l8W_rXkkjUIn5gq5_Oj1qmuSzmAkb5OhlU3JlDXzlfMtCy7jIGYWzAusBJi-Pg"/>
+</div>
+<div class="p-sm flex flex-col flex-grow">
+<h4 class="font-label-md text-label-md font-bold text-on-surface mb-xs truncate">无线蓝牙耳机</h4>
+<div class="mt-auto flex items-center gap-xs">
+<span class="material-symbols-outlined text-primary text-[16px]" data-icon="stars">stars</span>
+<span class="font-label-md text-label-md font-bold text-primary">8,000</span>
+</div>
+</div>
+</div>
+<!-- Item 3 -->
+<div class="bg-surface-container-lowest rounded-xl overflow-hidden border border-outline-variant/20 hover:border-primary/50 transition-all group cursor-pointer flex flex-col">
+<div class="h-32 w-full bg-surface-container-low relative overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A premium physical gift card with gold foil accents leaning against a small potted succulent on a marble surface. Bright, modern lifestyle photography." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDWL1sb1fXaH0-QajvdquuqbQFzL3EnT48yvqUUOOyfotZmnsQOC3uYkQleRKxpkCJ8VMfQ8jTignbrMsApf2WoZ5ScWfpwx0LycLqETFpYuypsPT6U41LrTnzs_457wVtgiRidzWvzT71ufFgMBjVq4kWwgsASk56-vh_ZjCV54QSV5j-EEq7BxYbJl6n-oj2IL8EZNmZXJFYRmXNHQV7jWGBRrA42zugYJiRfs2757-9jxXmbdKnpTg"/>
+</div>
+<div class="p-sm flex flex-col flex-grow">
+<h4 class="font-label-md text-label-md font-bold text-on-surface mb-xs truncate">¥100 礼品卡</h4>
+<div class="mt-auto flex items-center gap-xs">
+<span class="material-symbols-outlined text-primary text-[16px]" data-icon="stars">stars</span>
+<span class="font-label-md text-label-md font-bold text-primary">1,000</span>
+</div>
+</div>
+</div>
+<!-- Item 4 -->
+<div class="bg-surface-container-lowest rounded-xl overflow-hidden border border-outline-variant/20 hover:border-primary/50 transition-all group cursor-pointer flex flex-col">
+<div class="h-32 w-full bg-surface-container-low relative overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A sleek minimalist yoga mat rolled up next to a reusable glass water bottle. Soft morning light, clean white studio setting. Health and wellness aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAU0wBr2pJ3atx49EUqcXHX_xvEeQ4TcoFzv5e68TeunvGqojeTR5KoNJKcKEiGa20WFg4LZ6Lt6Qf75awQJoQTiqX3LZA-nNfV-wl4CbMFlN5hXywv32czZkFFS7AbkhwCK-5yznZrU9Ukukz3k3kiaC1ksYh-SEzfPPhEy24heSkGZA8yxfJD3GAP0sH2Hf34JEeT7b_2zmHAv6noqc0wpeUDyLemwANhpvFKBdqnaQEaN6cbbnfPuA"/>
+</div>
+<div class="p-sm flex flex-col flex-grow">
+<h4 class="font-label-md text-label-md font-bold text-on-surface mb-xs truncate">专业瑜伽垫</h4>
+<div class="mt-auto flex items-center gap-xs">
+<span class="material-symbols-outlined text-primary text-[16px]" data-icon="stars">stars</span>
+<span class="font-label-md text-label-md font-bold text-primary">3,200</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- Right Sidebar (4 cols) -->
+<aside class="lg:col-span-4 p-lg flex flex-col gap-lg">
+<!-- My Points Balance -->
+<div class="bg-surface-container-lowest rounded-xl p-lg border border-outline-variant/20 relative overflow-hidden">
+<!-- Background decorative element -->
+<div class="absolute -right-8 -top-8 w-32 h-32 bg-primary/5 rounded-full"></div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-sm relative z-10">我的积分余额</h3>
+<div class="flex items-end gap-sm mb-md relative z-10">
+<span class="font-display-sm text-display-sm text-primary font-bold">12,450</span>
+<span class="font-label-md text-label-md text-on-surface-variant mb-1">pts</span>
+</div>
+<!-- Progress Bar -->
+<div class="mb-sm relative z-10">
+<div class="flex justify-between font-label-md text-[10px] text-outline mb-xs">
+<span class="">白银会员</span>
+<span class="">黄金会员 (15,000 积分)</span>
+</div>
+<div class="w-full h-2 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-gradient-to-r from-primary to-secondary-container rounded-full" style="width: 83%"></div>
+</div>
+</div>
+<button class="w-full mt-md bg-surface-container-low text-primary border border-primary/20 py-sm rounded-lg font-label-md text-label-md hover:bg-primary/5 transition-colors">
+                    赚取更多积分
+                </button>
+</div>
+<!-- Redemption History -->
+<div class="bg-surface-container-lowest rounded-xl p-lg border border-outline-variant/20 flex-grow">
+<div class="flex justify-between items-center mb-md">
+<h3 class="font-label-md text-label-md font-bold text-on-surface">兑换记录</h3>
+<button class="p-xs hover:bg-surface-container-low rounded-full transition-colors text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]" data-icon="history">history</span>
+</button>
+</div>
+<div class="flex flex-col gap-md">
+<!-- History Item 1 -->
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-lg bg-surface-container-low flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="local_cafe">local_cafe</span>
+</div>
+<div class="flex-grow">
+<p class="font-label-md text-label-md text-on-surface">星巴克代金券</p>
+<p class="text-[11px] text-outline">Oct 12, 2023</p>
+</div>
+<span class="font-label-md text-label-md text-error font-medium">-500</span>
+</div>
+<!-- History Item 2 -->
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-lg bg-surface-container-low flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="movie">movie</span>
+</div>
+<div class="flex-grow">
+<p class="font-label-md text-label-md text-on-surface">电影票 x2</p>
+<p class="text-[11px] text-outline">Sep 28, 2023</p>
+</div>
+<span class="font-label-md text-label-md text-error font-medium">-1,200</span>
+</div>
+<!-- History Item 3 -->
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-lg bg-surface-container-low flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="fitness_center">fitness_center</span>
+</div>
+<div class="flex-grow">
+<p class="font-label-md text-label-md text-on-surface">健身房单日卡</p>
+<p class="text-[11px] text-outline">Sep 15, 2023</p>
+</div>
+<span class="font-label-md text-label-md text-error font-medium">-800</span>
+</div>
+</div>
+<a class="block text-center text-primary font-label-md text-label-md mt-lg hover:underline" href="#">查看完整历史</a>
+</div>
+</aside>
+</div>
+</div>
+</body></html>

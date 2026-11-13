@@ -1,0 +1,386 @@
+<!DOCTYPE html><html lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Omni-Life - 个人中心</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-tertiary": "#ffffff",
+                      "primary-fixed": "#dbe1ff",
+                      "surface-container-low": "#f2f3ff",
+                      "surface-tint": "#0053da",
+                      "surface-bright": "#faf8ff",
+                      "on-secondary": "#ffffff",
+                      "on-tertiary-fixed-variant": "#00531e",
+                      "secondary-fixed": "#ffdbcc",
+                      "inverse-primary": "#b4c5ff",
+                      "surface-dim": "#d8d9e6",
+                      "on-surface": "#191b24",
+                      "surface-container-highest": "#e1e2ee",
+                      "on-secondary-fixed": "#351000",
+                      "secondary-container": "#fe6b00",
+                      "surface": "#faf8ff",
+                      "surface-container": "#ecedfa",
+                      "surface-container-lowest": "#ffffff",
+                      "inverse-on-surface": "#eff0fd",
+                      "primary-container": "#0062ff",
+                      "primary": "#004cca",
+                      "on-surface-variant": "#424656",
+                      "outline-variant": "#c2c6d9",
+                      "on-background": "#191b24",
+                      "outline": "#737687",
+                      "primary-fixed-dim": "#b4c5ff",
+                      "surface-container-high": "#e7e7f4",
+                      "inverse-surface": "#2e303a",
+                      "surface-variant": "#e1e2ee",
+                      "on-primary-container": "#f3f3ff",
+                      "secondary": "#a04100",
+                      "on-tertiary-fixed": "#002108",
+                      "on-error-container": "#93000a",
+                      "on-primary-fixed-variant": "#003ea8",
+                      "secondary-fixed-dim": "#ffb693",
+                      "tertiary-fixed": "#69ff87",
+                      "on-secondary-fixed-variant": "#7a3000",
+                      "on-error": "#ffffff",
+                      "error-container": "#ffdad6",
+                      "tertiary-container": "#008133",
+                      "on-secondary-container": "#572000",
+                      "on-tertiary-container": "#d4ffd2",
+                      "tertiary": "#006526",
+                      "error": "#ba1a1a",
+                      "tertiary-fixed-dim": "#3ce36a",
+                      "on-primary-fixed": "#00174b",
+                      "background": "#faf8ff",
+                      "on-primary": "#ffffff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "lg": "24px",
+                      "xl": "32px",
+                      "xs": "8px",
+                      "sm": "12px",
+                      "margin-desktop": "40px",
+                      "margin-mobile": "16px",
+                      "md": "16px",
+                      "base": "4px",
+                      "gutter": "16px"
+              },
+              "fontFamily": {
+                      "label-md": ["Inter"],
+                      "display-sm": ["Inter"],
+                      "headline-sm": ["Inter"],
+                      "headline-lg-mobile": ["Inter"],
+                      "body-lg": ["Inter"],
+                      "body-md": ["Inter"],
+                      "display-lg": ["Inter"],
+                      "headline-lg": ["Inter"]
+              },
+              "fontSize": {
+                      "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500"}],
+                      "display-sm": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "headline-lg-mobile": ["22px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "display-lg": ["40px", {"lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "headline-lg": ["24px", {"lineHeight": "32px", "fontWeight": "600"}]
+              }
+            },
+          },
+        }
+    </script>
+</head>
+<body class="bg-surface text-on-surface font-body-md min-h-screen antialiased">
+<div class="flex w-full max-w-7xl mx-auto min-h-screen justify-center">
+<!-- Left Sidebar (Navigation) -->
+<header class="w-[88px] xl:w-[275px] shrink-0 flex flex-col justify-between h-screen sticky top-0 px-2 xl:px-4 py-2 border-r border-outline-variant hidden sm:flex">
+<div class="flex flex-col gap-1 xl:items-start items-center">
+<!-- Brand Logo -->
+<a class="p-3 w-12 h-12 rounded-full hover:bg-surface-container-low transition-colors flex items-center justify-center mb-2 xl:ml-2" href="#">
+<span class="material-symbols-outlined text-display-sm text-on-surface" data-icon="all_inclusive" style="font-variation-settings: 'FILL' 1;">all_inclusive</span>
+</a>
+<!-- Nav Links -->
+<nav class="flex flex-col gap-1 w-full xl:items-start items-center"><a class="x-nav-item flex items-center gap-5 px-3 xl:px-4 py-3 rounded-full transition-colors w-max" href="#"><span class="material-symbols-outlined text-[26px]" style="font-variation-settings: 'FILL' 1;">home</span><span class="text-headline-sm hidden xl:inline">首页</span></a><a class="x-nav-item flex items-center gap-5 px-3 xl:px-4 py-3 rounded-full transition-colors w-max" href="#"><span class="material-symbols-outlined text-[26px]">shopping_bag</span><span class="text-headline-sm hidden xl:inline font-normal">积分商城</span></a><a class="x-nav-item flex items-center gap-5 px-3 xl:px-4 py-3 rounded-full transition-colors w-max" href="#"><span class="material-symbols-outlined text-[26px]" style="font-variation-settings: 'FILL' 1;">person</span><span class="text-headline-sm hidden xl:inline font-bold">个人中心</span></a><a class="x-nav-item flex items-center gap-5 px-3 xl:px-4 py-3 rounded-full transition-colors w-max" href="#"><span class="material-symbols-outlined text-[26px]">more_horiz</span><span class="text-headline-sm hidden xl:inline font-normal">更多</span></a></nav>
+<!-- Post Button -->
+<button class="bg-primary text-on-primary font-bold text-[17px] w-12 h-12 xl:w-11/12 xl:h-14 rounded-full mt-4 hover:bg-primary/90 transition-colors shadow-sm flex items-center justify-center">
+<span class="material-symbols-outlined xl:hidden" style="font-variation-settings: 'FILL' 1;">add</span>
+<span class="hidden xl:inline">发布</span>
+</button>
+</div>
+<!-- User Profile -->
+<button class="flex items-center justify-between p-3 rounded-full hover:bg-surface-container-low transition-colors w-full mt-auto mb-3 xl:mb-4">
+<div class="flex items-center gap-3">
+<img class="w-10 h-10 rounded-full object-cover shrink-0" alt="Alex Chen" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBOMHH7QpDOHbUtSeod8QsLausY6NdmPoaTETV2VS_A3pN2lZowgWixKjhBx7j_eKN0Zyw_BWiYhlowDgRVR5afNIN1oBn_AtHgvJnyn0ESLPrkYgExjuKBy-hkFz0HJyE_KF-QCakDbz_faPpBx2lURU1nrGgUu2DQvzyUPl5p35yivF2bdujm0kHRSNN_IhgMoxbMQPQoimaQJBfq-RquHUsj4h3N_iaBO7RZ-a2vkIgcxzLXj3os7g">
+<div class="flex-col hidden xl:flex text-left">
+<span class="font-bold text-body-md leading-tight text-on-surface">Alex Chen</span>
+<span class="text-[15px] text-on-surface-variant leading-tight">@alexchen</span>
+</div>
+</div>
+<span class="material-symbols-outlined hidden xl:block text-on-surface">more_horiz</span>
+</button>
+</header>
+<!-- Middle Column (Main Content) -->
+<main class="flex-grow w-full max-w-[600px] border-r border-outline-variant/30 min-h-screen">
+<!-- Sticky Header -->
+<div class="sticky top-0 z-50 bg-surface/80 backdrop-blur-md flex items-center gap-6 px-4 py-2 cursor-pointer border-b border-outline-variant/10">
+<button class="w-9 h-9 rounded-full hover:bg-surface-variant flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+<div>
+<h2 class="font-bold text-[20px] text-on-surface leading-tight">Alex Chen</h2>
+<p class="text-on-surface-variant text-[13px]">1,204 动态</p>
+</div>
+</div>
+<!-- Profile Area -->
+<div class="relative border-b border-outline-variant/30 pb-0">
+<!-- Cover Image (Solid Color/Gradient for simplicity) -->
+<div class="h-[200px] bg-primary/20 w-full relative">
+<div class="absolute inset-0 bg-gradient-to-r from-primary/30 to-secondary-container/20"></div>
+</div>
+<!-- Profile Info -->
+<div class="px-4 pb-4 relative">
+<div class="flex justify-between items-start">
+<!-- Avatar overlapping cover -->
+<div class="-mt-16 relative w-[134px] h-[134px] rounded-full border-4 border-surface bg-surface overflow-hidden">
+<img alt="Alex Chen Profile" class="w-full h-full object-cover hover:brightness-90 transition-all cursor-pointer" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBOMHH7QpDOHbUtSeod8QsLausY6NdmPoaTETV2VS_A3pN2lZowgWixKjhBx7j_eKN0Zyw_BWiYhlowDgRVR5afNIN1oBn_AtHgvJnyn0ESLPrkYgExjuKBy-hkFz0HJyE_KF-QCakDbz_faPpBx2lURU1nrGgUu2DQvzyUPl5p35yivF2bdujm0kHRSNN_IhgMoxbMQPQoimaQJBfq-RquHUsj4h3N_iaBO7RZ-a2vkIgcxzLXj3os7g">
+</div>
+<!-- Edit Profile Button -->
+<button class="mt-3 px-4 py-1.5 rounded-full border border-outline-variant font-bold text-[15px] hover:bg-surface-variant transition-colors text-on-surface">
+                            编辑资料
+                        </button>
+</div>
+<div class="mt-3">
+<div class="flex items-center gap-2">
+<h1 class="font-black text-[20px] text-on-surface leading-tight">Alex Chen</h1>
+<div class="bg-tertiary-container text-on-tertiary-container text-[10px] font-bold px-1.5 py-0.5 rounded-sm flex items-center gap-0.5">
+<span class="material-symbols-outlined text-[10px]">star</span>
+                                专业版
+                            </div>
+</div>
+<p class="text-on-surface-variant text-[15px]">@alexchen</p>
+<p class="text-on-surface text-[15px] mt-3">用户体验设计师 | UI 爱好者。热衷于创建直观的用户体验并探索最新的 UI 趋势。✨</p>
+<div class="flex gap-4 mt-3 text-[15px] text-on-surface-variant">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[18px]">calendar_month</span>
+<span class="">加入于 2021年8月</span>
+</div>
+</div>
+<!-- Progress Bar (Sleek) -->
+<div class="mt-4 pt-3">
+<div class="flex justify-between items-end mb-1">
+<div class="flex items-center gap-2">
+<span class="font-bold text-[15px] text-on-surface">等级 5</span>
+</div>
+<span class="text-[13px] text-on-surface-variant">2,450 / 3,000 积分</span>
+</div>
+<div class="h-1 bg-surface-variant rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[80%] rounded-full"></div>
+</div>
+<div class="mt-3 flex gap-2">
+<div class="flex items-center gap-1 border border-outline-variant/30 rounded-full px-2.5 py-1">
+<span class="material-symbols-outlined text-secondary-container text-[16px]">local_fire_department</span>
+<span class="text-[13px] font-bold text-on-surface">连续签到 7 天</span>
+</div>
+<div class="flex items-center gap-1 border border-outline-variant/30 rounded-full px-2.5 py-1">
+<span class="material-symbols-outlined text-tertiary text-[16px]">verified</span>
+<span class="text-[13px] font-bold text-on-surface">社区达人</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Tabs -->
+<div class="flex mt-2">
+<button class="flex-1 hover:bg-surface-variant transition-colors flex justify-center group">
+<div class="py-4 border-b-4 border-primary font-bold text-[15px] text-on-surface">我的动态</div>
+</button>
+<button class="flex-1 hover:bg-surface-variant transition-colors flex justify-center group">
+<div class="py-4 text-on-surface-variant font-medium text-[15px] group-hover:text-on-surface">签到</div>
+</button>
+<button class="flex-1 hover:bg-surface-variant transition-colors flex justify-center group">
+<div class="py-4 text-on-surface-variant font-medium text-[15px] group-hover:text-on-surface">积分</div>
+</button>
+<button class="flex-1 hover:bg-surface-variant transition-colors flex justify-center group">
+<div class="py-4 text-on-surface-variant font-medium text-[15px] group-hover:text-on-surface">设置</div>
+</button>
+</div>
+</div>
+<!-- Feed Section -->
+<div class="flex flex-col pb-20">
+<!-- Feed Item -->
+<article class="p-4 border-b border-outline-variant/30 hover:bg-surface-variant/20 transition-colors cursor-pointer flex gap-3">
+<div class="shrink-0 pt-1">
+<img alt="Avatar" class="w-10 h-10 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCXP3hWHG0qBJ2TIH1eRBfoyA673XZaPogL860pVVcl3qAzzIbhjkIk45Z_jA_Tue8WKyUs5Cq3hpizGGSoKbCKgkiJk4vwx7Thn9-mGRjIrMo7FjOqX6nEfxhUi5L-zxXnE_4th3be9nDxdWf1xs9-itAoRgiyhmDjygU92BwDr_XeemkIl-J6buOyerwyirprivnckmOcrmt4EqqHTobYMO6_T0kh7y6BoUevKemSES88oRdByCQ2Sg">
+</div>
+<div class="flex-grow min-w-0">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-1 text-[15px] truncate">
+<span class="font-bold text-on-surface hover:underline truncate">Alex Chen</span>
+<span class="text-on-surface-variant truncate">@alexchen</span>
+<span class="text-on-surface-variant">·</span>
+<span class="text-on-surface-variant hover:underline">2小时前</span>
+</div>
+<button class="w-8 h-8 rounded-full hover:bg-primary/10 text-on-surface-variant hover:text-primary flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-[20px]">more_horiz</span>
+</button>
+</div>
+<p class="text-on-surface mt-1 text-[15px] leading-snug whitespace-pre-wrap">今天参加了公司的设计分享会，收获满满！特别是关于设计系统的部分，非常受启发。✨</p>
+<div class="mt-3 rounded-2xl border border-outline-variant/30 overflow-hidden">
+<img alt="Conference" class="w-full h-auto object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDMYp5ysxwiohl6vtxS9UoVg0XKTYWUZ46dz1izbQ8B6Ijb59A9yCmt1hSec_7nxge9BlDRj-UJzFFuV8UKatkf4gUMLE4EqRBeT8EZtbSNln3L1Qa7TkjhkvqUToaOPGnhewi6xdHFqC4gOq5hdCGL64fXzqqFGjwWPbqw7n2FswRdXEH8dwzfROW5uWaXNGXgRUt-sWPvbqmj1B9yq-mF9fyZNYQdV8fu4K2eMPtDBJlYxlCSumNGgQ">
+</div>
+<!-- Interaction Bar -->
+<div class="flex justify-between mt-3 text-on-surface-variant max-w-[425px]">
+<button class="flex items-center gap-1 hover:text-primary group">
+<div class="w-8 h-8 rounded-full group-hover:bg-primary/10 flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-[18px]">chat_bubble_outline</span>
+</div>
+<span class="text-[13px]">5</span>
+</button>
+<button class="flex items-center gap-1 hover:text-tertiary group">
+<div class="w-8 h-8 rounded-full group-hover:bg-tertiary/10 flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-[18px]">cached</span>
+</div>
+<span class="text-[13px]">2</span>
+</button>
+<button class="flex items-center gap-1 hover:text-[#f91880] group">
+<div class="w-8 h-8 rounded-full group-hover:bg-[#f91880]/10 flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-[18px]">favorite_border</span>
+</div>
+<span class="text-[13px]">24</span>
+</button>
+<button class="flex items-center gap-1 hover:text-primary group">
+<div class="w-8 h-8 rounded-full group-hover:bg-primary/10 flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-[18px]">bar_chart</span>
+</div>
+<span class="text-[13px]">1.2k</span>
+</button>
+<button class="flex items-center gap-1 hover:text-primary group">
+<div class="w-8 h-8 rounded-full group-hover:bg-primary/10 flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-[18px]">upload</span>
+</div>
+</button>
+</div>
+</div>
+</article>
+</div>
+</main>
+<!-- Right Column (Widgets) -->
+<aside class="hidden lg:block w-[350px] flex-shrink-0 px-6 py-1 sticky top-0 h-screen overflow-y-auto pb-20">
+<!-- Search Bar -->
+<div class="sticky top-0 bg-surface pt-1 pb-4 z-10">
+<div class="bg-surface-variant/50 rounded-full flex items-center px-4 py-2.5 border border-transparent focus-within:border-primary focus-within:bg-surface transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant">search</span>
+<input class="bg-transparent border-none outline-none focus:ring-0 text-on-surface ml-3 w-full placeholder:text-on-surface-variant text-[15px]" placeholder="搜索" type="text">
+</div>
+</div>
+<div class="flex flex-col gap-4">
+<!-- Check-in Calendar Widget -->
+<div class="border border-outline-variant/30 rounded-2xl p-4 bg-surface-container-lowest">
+<div class="flex justify-between items-center mb-4">
+<h2 class="font-bold text-[20px] text-on-surface">签到月历</h2>
+<span class="text-[13px] text-primary bg-primary/10 px-2.5 py-1 rounded-full font-bold">8月</span>
+</div>
+<div class="grid grid-cols-7 gap-1 text-center mb-2">
+<div class="text-[13px] font-medium text-on-surface-variant">日</div>
+<div class="text-[13px] font-medium text-on-surface-variant">一</div>
+<div class="text-[13px] font-medium text-on-surface-variant">二</div>
+<div class="text-[13px] font-medium text-on-surface-variant">三</div>
+<div class="text-[13px] font-medium text-on-surface-variant">四</div>
+<div class="text-[13px] font-medium text-on-surface-variant">五</div>
+<div class="text-[13px] font-medium text-on-surface-variant">六</div>
+</div>
+<div class="grid grid-cols-7 gap-1 text-center">
+<div class="aspect-square flex items-center justify-center rounded-full text-[14px] text-on-surface-variant">28</div>
+<div class="aspect-square flex items-center justify-center rounded-full text-[14px] text-on-surface-variant">29</div>
+<div class="aspect-square flex items-center justify-center rounded-full text-[14px] text-on-surface-variant">30</div>
+<div class="aspect-square flex items-center justify-center rounded-full text-[14px] text-on-surface-variant">31</div>
+<div class="aspect-square flex items-center justify-center rounded-full text-[14px] bg-tertiary/10 text-tertiary font-bold">1</div>
+<div class="aspect-square flex items-center justify-center rounded-full text-[14px] bg-tertiary/10 text-tertiary font-bold">2</div>
+<div class="aspect-square flex items-center justify-center rounded-full text-[14px] bg-tertiary/10 text-tertiary font-bold relative">
+                            3
+                            <div class="absolute bottom-1 right-1 w-1 h-1 bg-tertiary rounded-full"></div>
+</div>
+<div class="aspect-square flex items-center justify-center rounded-full text-[14px] bg-primary text-on-primary font-bold">4</div>
+<div class="aspect-square flex items-center justify-center rounded-full text-[14px] text-on-surface hover:bg-surface-variant cursor-pointer">5</div>
+<div class="aspect-square flex items-center justify-center rounded-full text-[14px] text-on-surface hover:bg-surface-variant cursor-pointer">6</div>
+<div class="aspect-square flex items-center justify-center rounded-full text-[14px] text-on-surface hover:bg-surface-variant cursor-pointer">7</div>
+<div class="aspect-square flex items-center justify-center rounded-full text-[14px] text-on-surface hover:bg-surface-variant cursor-pointer">8</div>
+<div class="aspect-square flex items-center justify-center rounded-full text-[14px] text-on-surface hover:bg-surface-variant cursor-pointer">9</div>
+<div class="aspect-square flex items-center justify-center rounded-full text-[14px] text-on-surface hover:bg-surface-variant cursor-pointer">10</div>
+</div>
+<button class="w-full mt-4 bg-on-surface text-surface font-bold text-[15px] py-2.5 rounded-full hover:bg-on-surface/90 transition-colors">
+                        今日打卡 (+10 积分)
+                    </button>
+</div>
+<!-- Points Details Widget -->
+<div class="border border-outline-variant/30 rounded-2xl p-4 bg-surface-container-lowest">
+<div class="flex justify-between items-center mb-4">
+<h2 class="font-bold text-[20px] text-on-surface">积分明细</h2>
+<a class="text-[14px] text-primary hover:underline" href="#">全部</a>
+</div>
+<div class="flex flex-col gap-0">
+<div class="flex justify-between items-center py-3 border-b border-outline-variant/30 last:border-0 hover:bg-surface-variant/20 transition-colors px-2 -mx-2 rounded-lg">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[20px]">edit_document</span>
+</div>
+<div>
+<p class="font-bold text-[15px] text-on-surface leading-snug">发布动态</p>
+<p class="text-[13px] text-on-surface-variant mt-0.5">今天 10:24</p>
+</div>
+</div>
+<span class="font-bold text-[15px] text-tertiary">+50</span>
+</div>
+<div class="flex justify-between items-center py-3 border-b border-outline-variant/30 last:border-0 hover:bg-surface-variant/20 transition-colors px-2 -mx-2 rounded-lg">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[20px]">check_circle</span>
+</div>
+<div>
+<p class="font-bold text-[15px] text-on-surface leading-snug">每日签到</p>
+<p class="text-[13px] text-on-surface-variant mt-0.5">今天 08:00</p>
+</div>
+</div>
+<span class="font-bold text-[15px] text-tertiary">+10</span>
+</div>
+<div class="flex justify-between items-center py-3 border-b border-outline-variant/30 last:border-0 hover:bg-surface-variant/20 transition-colors px-2 -mx-2 rounded-lg">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-secondary-container">
+<span class="material-symbols-outlined text-[20px]">redeem</span>
+</div>
+<div>
+<p class="font-bold text-[15px] text-on-surface leading-snug">兑换咖啡券</p>
+<p class="text-[13px] text-on-surface-variant mt-0.5">昨天 15:30</p>
+</div>
+</div>
+<span class="font-bold text-[15px] text-on-surface">-200</span>
+</div>
+</div>
+</div>
+<!-- Footer Links inside right column -->
+<div class="flex flex-wrap gap-x-3 gap-y-1 mt-4 px-2 text-[13px] text-on-surface-variant">
+<a class="hover:underline" href="#">服务条款</a>
+<a class="hover:underline" href="#">隐私政策</a>
+<a class="hover:underline" href="#">支持中心</a>
+<a class="hover:underline" href="#">关于我们</a>
+<span class="">© 2024 Omni-Life</span>
+</div>
+</div>
+</aside>
+</div>
+
+
+
+
+</body></html>

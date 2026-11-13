@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.life.mapper.LifeOrderMapper">
+
+    <resultMap type="LifeOrder" id="LifeOrderResult">
+        <id     property="id"              column="id"/>
+        <result property="orderNo"         column="order_no"/>
+        <result property="userId"          column="user_id"/>
+        <result property="nickname"        column="nickname"/>
+        <result property="orderType"       column="order_type"/>
+        <result property="status"          column="status"/>
+        <result property="totalAmount"     column="total_amount"/>
+        <result property="payAmount"       column="pay_amount"/>
+        <result property="pointsUsed"      column="points_used"/>
+        <result property="payChannel"      column="pay_channel"/>
+        <result property="payTime"         column="pay_time"/>
+        <result property="deliveryAddress" column="delivery_address"/>
+        <result property="remark"          column="remark"/>
+        <result property="createTime"      column="create_time"/>
+        <result property="updateTime"      column="update_time"/>
+        <result property="creater"         column="creater"/>
+        <result property="updater"         column="updater"/>
+        <result property="deleted"         column="deleted"/>
+    </resultMap>
+
+    <sql id="selectOrderVo">
+        select o.id, o.order_no, o.user_id, o.order_type, o.status, o.total_amount, o.pay_amount,
+               o.points_used, o.pay_channel, o.pay_time, o.delivery_address, o.remark,
+               o.create_time, o.update_time, o.creater, o.updater, o.deleted,
+               coalesce(nullif(u.nickname, ''), u.username) as nickname
+        from life_order o
+        left join life_user u on u.id = o.user_id and u.deleted = 0
+    </sql>
+
+    <!-- 管理端分页: 按状态/类型/用户/下单时间区间筛选, 时间降序(口径对齐C端 queryAdminOrderPage) -->
+    <select id="selectLifeOrderList" parameterType="com.ruoyi.life.domain.query.LifeOrderQuery" resultMap="LifeOrderResult">
+        <include refid="selectOrderVo"/>
+        where o.deleted = 0
+        <if test="userId != null">
+            and o.user_id = #{userId}
+        </if>
+        <if test="orderType != null">
+            and o.order_type = #{orderType}
+        </if>
+        <if test="status != null">
+            and o.status = #{status}
+        </if>
+        <if test="startTime != null and startTime != ''">
+            and o.create_time &gt;= #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            and o.create_time &lt;= #{endTime}
+        </if>
+        order by o.create_time desc, o.id desc
+    </select>
+
+    <select id="selectLifeOrderById" parameterType="Long" resultMap="LifeOrderResult">
+        <include refid="selectOrderVo"/>
+        where o.deleted = 0 and o.id = #{id}
+    </select>
+
+    <update id="updateLifeOrder" parameterType="LifeOrder">
+        update life_order
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="status != null">status = #{status},</if>
+            <if test="payChannel != null">pay_channel = #{payChannel},</if>
+            <if test="payTime != null">pay_time = #{payTime},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="updater != null">updater = #{updater},</if>
+        </trim>
+        where id = #{id} and deleted = 0
+    </update>
+
+</mapper>

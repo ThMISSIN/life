@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.life.mapper.LifeOrderDetailMapper">
+
+    <resultMap type="LifeOrderDetail" id="LifeOrderDetailResult">
+        <id     property="id"          column="id"/>
+        <result property="orderId"     column="order_id"/>
+        <result property="orderNo"     column="order_no"/>
+        <result property="itemType"    column="item_type"/>
+        <result property="itemId"      column="item_id"/>
+        <result property="itemName"    column="item_name"/>
+        <result property="itemImage"   column="item_image"/>
+        <result property="price"       column="price"/>
+        <result property="quantity"    column="quantity"/>
+        <result property="totalAmount" column="total_amount"/>
+        <result property="pointsPrice" column="points_price"/>
+        <result property="createTime"  column="create_time"/>
+        <result property="updateTime"  column="update_time"/>
+        <result property="creater"     column="creater"/>
+        <result property="updater"     column="updater"/>
+        <result property="deleted"     column="deleted"/>
+    </resultMap>
+
+    <select id="selectByOrderIds" resultMap="LifeOrderDetailResult">
+        select id, order_id, order_no, item_type, item_id, item_name, item_image, price, quantity,
+               total_amount, points_price, create_time, update_time, creater, updater, deleted
+        from life_order_detail
+        where deleted = 0 and order_id in
+        <foreach collection="orderIds" item="orderId" open="(" separator="," close=")">
+            #{orderId}
+        </foreach>
+        order by id asc
+    </select>
+
+    <select id="selectByOrderNo" parameterType="String" resultMap="LifeOrderDetailResult">
+        select id, order_id, order_no, item_type, item_id, item_name, item_image, price, quantity,
+               total_amount, points_price, create_time, update_time, creater, updater, deleted
+        from life_order_detail
+        where deleted = 0 and order_no = #{orderNo}
+        order by id asc
+    </select>
+
+</mapper>
